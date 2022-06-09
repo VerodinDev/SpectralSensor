@@ -1,0 +1,8 @@
+html/
+Doxyfile
+.vscode/
+.idea/
+*.hex
+*.elf
+*.log
+*.py
