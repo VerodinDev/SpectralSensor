@@ -171,7 +171,7 @@ uint8_t MCP2221::checkRegisterBit(uint8_t reg, uint8_t pos)
 {
 	uint8_t register_value = readRegisterByte(reg);
 
-	return (uint8_t)((register_value >> pos) & 0x01);
+    return (uint8_t)((register_value >> pos) & 0x01);
 }
 
 bool MCP2221::modifyRegisterMultipleBit(uint8_t reg, uint8_t value, uint8_t pos, uint8_t bits)
