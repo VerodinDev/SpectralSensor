@@ -74,7 +74,7 @@
 #define AS7341_SPECTRAL_INT_LOW_MSK 0b00010000  ///< bitmask to check for a low threshold interrupt
 
 // gain multipliers
-typedef enum
+enum as7341_gain
 {
     AS7341_GAIN_0_5X,
     AS7341_GAIN_1X,
@@ -87,18 +87,18 @@ typedef enum
     AS7341_GAIN_128X,
     AS7341_GAIN_256X,
     AS7341_GAIN_512X,
-} as7341_gain_t;
+};
 
 // SMUX configuration commands
-typedef enum
+enum as7341_smux_cmd
 {
     AS7341_SMUX_CMD_ROM_RESET, ///< ROM code initialization of SMUX
     AS7341_SMUX_CMD_READ,      ///< Read SMUX configuration to RAM from SMUX chain
     AS7341_SMUX_CMD_WRITE,     ///< Write SMUX configuration from RAM to SMUX chain
-} as7341_smux_cmd_t;
+} ;
 
 // ADC channel specifiers
-typedef enum
+enum as7341_adc_channel
 {
     AS7341_ADC_CHANNEL_0,
     AS7341_ADC_CHANNEL_1,
@@ -106,10 +106,10 @@ typedef enum
     AS7341_ADC_CHANNEL_3,
     AS7341_ADC_CHANNEL_4,
     AS7341_ADC_CHANNEL_5,
-} as7341_adc_channel_t;
+} ;
 
 // spectral channel specifiers
-typedef enum
+enum as7341_color_channel_t
 {
     AS7341_CHANNEL_F1,
     AS7341_CHANNEL_F2,
@@ -123,10 +123,10 @@ typedef enum
     AS7341_CHANNEL_F8,
     AS7341_CHANNEL_CLEAR,
     AS7341_CHANNEL_NIR,
-} as7341_color_channel_t;
+} ;
 
 // The number of measurement cycles with spectral data outside of a threshold required to trigger an interrupt
-// typedef enum
+// enum as7341_int_cycle_count
 //{
 //    AS7341_INT_COUNT_ALL,
 //    AS7341_INT_COUNT_1,
@@ -144,20 +144,37 @@ typedef enum
 //    AS7341_INT_COUNT_50,
 //    AS7341_INT_COUNT_55,
 //    AS7341_INT_COUNT_60,
-//} as7341_int_cycle_count_t;
+//} ;
 
 // pin directions
-typedef enum
+enum as7341_gpio_dir
 {
     AS7341_GPIO_OUTPUT, ///< THhe GPIO pin is configured as an open drain output
     AS7341_GPIO_INPUT,  ///< The GPIO Pin is set as a high-impedence input
-} as7341_gpio_dir_t;
+} ;
 
 // wait states for async reading
-typedef enum
+enum as7341_waiting
 {
     AS7341_WAITING_START,
     AS7341_WAITING_LOW,
     AS7341_WAITING_HIGH,
     AS7341_WAITING_DONE,
-} as7341_waiting_t;
+} ;
+
+// AGC signal hysteresis
+enum as7341_agc_l_level
+{
+    AGC_L_12,
+    AGC_L_25,
+    AGC_L_37,
+    AGC_L_50
+};
+
+enum as7341_agc_h_level
+{
+    AGC_H_50,
+    AGC_H_62,
+    AGC_H_75,
+    AGC_H_87
+};

@@ -24,11 +24,11 @@ class AS7341
 
     bool setASTEP(uint16_t astep_value);
     bool setATIME(uint8_t atime_value);
-    bool setGain(as7341_gain_t gain_value);
+    bool setGain(as7341_gain gain_value);
 
     uint16_t getASTEP();
     uint8_t getATIME();
-    as7341_gain_t getGain();
+    as7341_gain getGain();
 
     double getTINT();
 
@@ -40,6 +40,7 @@ class AS7341
     void setup_F5F8_Clear_NIR(void);
 
     void powerEnable(bool enable_power);
+    void setAutoGain(bool enable);
     bool enableSpectralMeasurement(bool enable_measurement);
 
     bool enableLED(bool enable_led);
@@ -64,14 +65,16 @@ class AS7341
     // AS7341();
 
     bool enableSMUX(void);
-    bool setSMUXCommand(as7341_smux_cmd_t command);
+    bool setSMUXCommand(as7341_smux_cmd command);
     void setSMUXLowChannels(bool f1_f4);
     void normalise();
-    void enableAutoGain();
     uint8_t getAStatus();
 
     MCP2221 m_i2c;
-    as7341_waiting_t m_readingState;
+    as7341_waiting m_readingState;
+    as7341_gain m_gainStatus;
+    bool m_isSaturated;
+    bool m_useAutoGain;
 
     // The value of the last reading of the spectral interrupt source register
     uint8_t m_last_spectral_int_source;

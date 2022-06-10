@@ -106,9 +106,10 @@ int main()
     // uint16_t astep = sensor.getASTEP();
     // exit(100);
     sensor.setGain(AS7341_GAIN_32X);
+    sensor.setAutoGain(false);
 
-    sensor.setLEDCurrent(15);
-    // sensor.enableLED(true);
+    // sensor.setLEDCurrent(15);
+    //  sensor.enableLED(true);
 
     sensor.readAllChannels();
 

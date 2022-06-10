@@ -8,11 +8,11 @@
 #include <windows.h> // Sleep()
 
 AS7341::AS7341(MCP2221 &i2cController)
-    : m_i2c(i2cController), m_readingState(AS7341_WAITING_DONE), m_last_spectral_int_source(0), m_basicCounts{0}
+    : m_i2c(i2cController), m_readingState(AS7341_WAITING_DONE), m_gainStatus(AS7341_GAIN_1X), m_isSaturated(false),
+      m_useAutoGain(false),
+      m_last_spectral_int_source(0), m_basicCounts{0}, m_channel_readings{0}, m_correctedCounts{0}, m_normalisedValues{
+                                                                                                        0}
 {
-    // m_channel_readings{ 0 };
-    // m_correctedCounts{ 0 };
-    // m_normalisedValues{ 0 };
 }
 
 AS7341::~AS7341()
@@ -50,12 +50,21 @@ bool AS7341::readAllChannels(uint16_t *readings_buffer)
 
     bool low_success = m_i2c.readRegister(AS7341_CH0_DATA_L, (uint8_t *)readings_buffer, 12);
 
+    getAStatus();
+
     // read high channels
     setSMUXLowChannels(false);
     enableSpectralMeasurement(true);
     delayForData(0);
 
     bool result = low_success && m_i2c.readRegister(AS7341_CH0_DATA_L, (uint8_t *)&readings_buffer[6], 12);
+
+    getAStatus();
+
+    if (m_isSaturated)
+    {
+        printf("Saturated\n");
+    }
 
     return result;
 }
@@ -146,7 +155,7 @@ bool AS7341::enableSMUX(void)
         return success;
 }
 
-bool AS7341::setSMUXCommand(as7341_smux_cmd_t command)
+bool AS7341::setSMUXCommand(as7341_smux_cmd command)
 {
     return m_i2c.modifyRegisterMultipleBit(AS7341_CFG6, command, 3, 2);
 }
@@ -293,7 +302,7 @@ uint16_t AS7341::getASTEP()
 }
 
 // set ADC gain multiplier
-bool AS7341::setGain(as7341_gain_t gain_value)
+bool AS7341::setGain(as7341_gain gain_value)
 {
     return m_i2c.writeRegisterByte(AS7341_CFG1, gain_value);
 
@@ -301,12 +310,18 @@ bool AS7341::setGain(as7341_gain_t gain_value)
 }
 
 // get ADC gain multiplier
-as7341_gain_t AS7341::getGain()
+as7341_gain AS7341::getGain()
 {
-    return static_cast<as7341_gain_t>(m_i2c.readRegisterByte(AS7341_CFG1));
+    // AGC todo
+    if (m_useAutoGain)
+    {
+        return m_gainStatus;
+    }
+
+    return static_cast<as7341_gain>(m_i2c.readRegisterByte(AS7341_CFG1));
 
     // debug
-    // as7341_gain_t gain = static_cast<as7341_gain_t>(m_i2c.readRegisterByte(AS7341_CFG1));
+    // as7341_gain_t gain = static_cast<as7341_gain>(m_i2c.readRegisterByte(AS7341_CFG1));
     // printf("Gain = %d\n", gain);
     // return gain;
 }
@@ -332,8 +347,8 @@ double AS7341::getTINT()
 double AS7341::toBasicCounts(uint16_t raw)
 {
     float gain_val = 0;
-    as7341_gain_t gain = getGain();
-    ;
+    as7341_gain gain = getGain();
+
     switch (gain)
     {
     case AS7341_GAIN_0_5X:
@@ -435,7 +450,7 @@ void AS7341::calculateBasicCounts()
 
 void AS7341::applyGainCorrection(double corrections[])
 {
-    as7341_gain_t gain = getGain();
+    as7341_gain gain = getGain();
 
     for (uint8_t channel = 0; channel < 10; channel++)
     {
@@ -476,16 +491,19 @@ void AS7341::normalise()
         m_correctedCounts[i] /= highestValue;
 }
 
-// todo enable/disable flag?
-void AS7341::enableAutoGain()
+void AS7341::setAutoGain(bool enable)
 {
     bool result(false);
-    bool enable = true;
 
     // enable spectral AGC (SP_AGC)
     uint8_t cfg8_reg = m_i2c.readRegisterByte(AS7341_CFG8);
     cfg8_reg = m_i2c.modifyBitInByte(cfg8_reg, (uint8_t)enable, 2);
     result = m_i2c.writeRegisterByte(AS7341_CFG8, cfg8_reg);
+
+    m_useAutoGain = enable;
+
+    if (!enable)
+        return;
 
     // set spectral threshold channel (SP_TH_CH) to use ADC4 (CLEAR channel)
     uint8_t thresholdChannel = 4;
@@ -494,13 +512,13 @@ void AS7341::enableAutoGain()
     cfg12_reg = m_i2c.modifyRegisterMultipleBit(cfg12_reg, thresholdChannel, 0, 2);
     result = m_i2c.writeRegisterByte(AS7341_CFG12, cfg12_reg);
 
-    // Sets the channel used for interrupts, persistenceand
+    // Sets the channel used for interrupts, persistence and
     //	the AGC, if enabled, to determine device statusand
     //	gain settings.
 
     // set thresholds (AGC_H and AGC_L)
-    uint8_t lowHysteresis = 3;  // 50%
-    uint8_t highHysteresis = 3; // 87.5%
+    uint8_t lowHysteresis = AGC_L_50;
+    uint8_t highHysteresis = AGC_H_87;
 
     uint8_t cfg10_reg = m_i2c.readRegisterByte(AS7341_CFG10);
     cfg10_reg = m_i2c.modifyRegisterMultipleBit(cfg10_reg, lowHysteresis, 4, 2);
@@ -524,11 +542,13 @@ uint8_t AS7341::getAStatus()
 
     // 3:0 AGAIN_STATUS
     // required to calculate spectral results if AGC is enabled
-    uint8_t gainStatus = astatus_reg & 0x07;
+    m_gainStatus = static_cast<as7341_gain>(astatus_reg & 0x07);
 
     // 7 ASAT_STATUS
     // Indicates if the latched data is affected by analog or digital saturation
-    bool isSaturated = astatus_reg & 0x80;
+    m_isSaturated = astatus_reg & 0x80;
+
+    printf("saturation = %d, gain status = %d\n", m_isSaturated, m_gainStatus);
 
     return true;
 }
@@ -606,7 +626,7 @@ uint8_t AS7341::getOptimizedMeasurementValues(bool checkState, bool optimizedVal
     //		else if (rawValueState == RawValueStates.Noise)
     //		{
     //			//BaseFunctions.DebugOut(true, "Noise gain: " + currentGain.ToString() + " Raw: " +
-    //rawVal.Max().ToString());
+    // rawVal.Max().ToString());
     //			// in case of low gain value use the middle between max and current gain
     //			if (currentGain == maxGain)
     //			{
@@ -630,7 +650,7 @@ uint8_t AS7341::getOptimizedMeasurementValues(bool checkState, bool optimizedVal
     //		else
     //		{
     //			//BaseFunctions.DebugOut(true, "Ok gain: " + currentGain.ToString() + " Raw: " +
-    //rawVal.Max().ToString()); 			break;
+    // rawVal.Max().ToString()); 			break;
     //		}
     //	}
     //
