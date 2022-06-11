@@ -300,6 +300,7 @@ uint8_t AS7341::getATIME()
 // set ASTEP
 bool AS7341::setASTEP(uint16_t astep_value)
 {
+    // for some reason no matter what I do, ASTEP ends up wrong in the registers. Doing 2 seperate writes works fine.
     // return m_i2c.writeRegister(AS7341_ASTEP_L, (uint8_t *)&astep_value, 2);
 
     m_i2c.writeRegisterByte(AS7341_ASTEP_L, 0x57);
@@ -334,13 +335,7 @@ as7341_gain AS7341::getGain()
 {
     return m_useAutoGain ? m_gainStatus : static_cast<as7341_gain>(m_i2c.readRegisterByte(AS7341_CFG1));
 
-    // AGC
-    // if (m_useAutoGain)
-    //{
-    //    return m_gainStatus;
-    //}
-
-    return static_cast<as7341_gain>(m_i2c.readRegisterByte(AS7341_CFG1));
+    //return static_cast<as7341_gain>(m_i2c.readRegisterByte(AS7341_CFG1));
 
     // debug
     // as7341_gain_t gain = static_cast<as7341_gain>(m_i2c.readRegisterByte(AS7341_CFG1));
