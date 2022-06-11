@@ -79,6 +79,9 @@ void spectralReconstruction()
 
 void takeReading(AS7341 &sensor)
 {
+    // sensor.setLEDCurrent(15);
+    // sensor.enableLED(true);
+
     sensor.readAllChannels();
 
     // sensor.enableLED(false);
@@ -154,9 +157,6 @@ int main()
     // exit(100);
     sensor.setGain(AS7341_GAIN_32X);
     sensor.setAutoGain(true);
-
-    // sensor.setLEDCurrent(15);
-    //  sensor.enableLED(true);
 
     // take n readings
     for (uint8_t readings = 0; readings < 10; readings++)
