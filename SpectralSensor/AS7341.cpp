@@ -88,8 +88,9 @@ bool AS7341::readAllChannels(uint16_t *readings_buffer)
 // delay while waiting for data, with option to time out and recover
 void AS7341::delayForData(uint16_t waitTime)
 {
-    if (waitTime == 0) // Wait forever
+    if (waitTime == 0)
     {
+        // wait forever
         while (!getIsDataReady())
         {
             Sleep(1);
@@ -97,7 +98,7 @@ void AS7341::delayForData(uint16_t waitTime)
         return;
     }
 
-    if (waitTime > 0) // Wait for that many milliseconds
+    if (waitTime > 0)
     {
         uint32_t elapsedMillis = 0;
 
@@ -156,7 +157,7 @@ bool AS7341::enableSMUX(void)
 {
     bool success = m_i2c.modifyRegisterBit(AS7341_ENABLE, true, 4);
 
-    int timeOut = 1000; // Arbitrary value, but if it takes 1000 milliseconds then something is wrong
+    int timeOut = 1000; // arbitrary value, but if it takes 1000 milliseconds then something is wrong
     int count = 0;
 
     while (m_i2c.checkRegisterBit(AS7341_ENABLE, 4) && count < timeOut)
@@ -181,19 +182,19 @@ bool AS7341::enableLED(bool enable_led)
 {
     printf("Set LED to %d\n", enable_led);
 
-    // Access 0x60-0x74
+    // access 0x60-0x74
     setBank(true);
 
     bool result =
         m_i2c.modifyRegisterBit(AS7341_CONFIG, enable_led, 3) && m_i2c.modifyRegisterBit(AS7341_LED, enable_led, 7);
 
-    // Access registers 0x80 and above (default)
+    // access registers 0x80 and above (default)
     setBank(false);
 
     return result;
 }
 
-// Set the current limit for the LED
+// set current limit for the LED
 bool AS7341::setLEDCurrent(uint16_t led_current_ma)
 {
     // check within permissible range
@@ -335,7 +336,7 @@ as7341_gain AS7341::getGain()
 {
     return m_useAutoGain ? m_gainStatus : static_cast<as7341_gain>(m_i2c.readRegisterByte(AS7341_CFG1));
 
-    //return static_cast<as7341_gain>(m_i2c.readRegisterByte(AS7341_CFG1));
+    // return static_cast<as7341_gain>(m_i2c.readRegisterByte(AS7341_CFG1));
 
     // debug
     // as7341_gain_t gain = static_cast<as7341_gain>(m_i2c.readRegisterByte(AS7341_CFG1));
@@ -413,9 +414,6 @@ double AS7341::toBasicCounts(uint16_t raw)
         break;
     }
 
-    // printf("TINT = %f", getTINT());
-
-    // return static_cast<float>(raw / (gain_val * (getATIME() + 1) * (getASTEP() + 1) * 2.78 / 1000));
     return raw / (gain_val * getTINT());
 }
 
@@ -456,23 +454,6 @@ void AS7341::calculateBasicCounts()
     {
         m_basicCounts[channel] = toBasicCounts(m_rawValues[channel]);
     }
-
-    //// strip out CLEAR and NIR channels in the middle
-    // m_basicCounts[0] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F1]);
-    // m_basicCounts[1] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F2]);
-    // m_basicCounts[2] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F3]);
-    // m_basicCounts[3] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F4]);
-    // m_basicCounts[4] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F5]);
-    // m_basicCounts[5] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F6]);
-    // m_basicCounts[6] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F7]);
-    // m_basicCounts[7] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F8]);
-
-    // remove completely?
-    // if (MAX_CHANNEL > AS7341_CHANNEL_F8)
-    //{
-    //    m_basicCounts[8] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_CLEAR_0]);
-    //    m_basicCounts[9] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_NIR_0]);
-    //}
 }
 
 void AS7341::applyGainCorrection(double corrections[])
@@ -530,7 +511,9 @@ void AS7341::setAutoGain(bool enable)
     m_useAutoGain = enable;
 
     if (!enable)
+    {
         return;
+    }
 
     // set spectral threshold channel (SP_TH_CH) to use ADC3 (F8 channel)
     uint8_t thresholdChannel = AS7341_ADC_CHANNEL_3;
