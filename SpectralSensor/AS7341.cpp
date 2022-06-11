@@ -40,15 +40,14 @@ bool AS7341::init()
 // read spectral channels F1-8, Clear and NIR
 bool AS7341::readAllChannels(uint16_t *readings_buffer)
 {
-    printf("Read all channels\n");
+    printf("Reading all channels\n");
 
-    // uint16_t buffer[12] = { 0x00 };
-
-    // TODO cleanup and make efficient (e.g. don't switch SMUX so many times)
-    // get gain value
+    // turn on auto gain
+    // do this before taking actual readings or the result is incorrect (affects TINT?)
     setAutoGain(true);
 
-    // read high channels
+    // read high channels (need F8 for auto gain)
+    // just use same buffer, will be overwritten anyway
     setSMUXLowChannels(false);
     enableSpectralMeasurement(true);
     delayForData(0);
@@ -65,32 +64,17 @@ bool AS7341::readAllChannels(uint16_t *readings_buffer)
     setAutoGain(false);
 
     // now take actual readings
+    enableSpectralMeasurement(true);
+    delayForData(0);
+
+    m_i2c.readRegister(AS7341_CH0_DATA_L, (uint8_t *)&readings_buffer[6], 12);
 
     // read low channels
     setSMUXLowChannels(true);
     enableSpectralMeasurement(true);
     delayForData(0);
 
-    bool low_success = m_i2c.readRegister(AS7341_CH0_DATA_L, (uint8_t *)readings_buffer, 12);
-
-    //if (m_isSaturated)
-    //{
-    //    printf("Saturated\n");
-    //}
-
-    // read high channels
-    setSMUXLowChannels(false);
-    enableSpectralMeasurement(true);
-    delayForData(0);
-
-    bool result = low_success && m_i2c.readRegister(AS7341_CH0_DATA_L, (uint8_t *)&readings_buffer[6], 12);
-
-    //getAStatus();
-
-    //if (m_isSaturated)
-    //{
-    //    printf("Saturated\n");
-    //}
+    m_i2c.readRegister(AS7341_CH0_DATA_L, (uint8_t *)readings_buffer, 12);
 
     // strip out CLEAR and NIR channels in the middle
     m_rawValues[0] = m_channel_readings[AS7341_CHANNEL_F1];
@@ -104,7 +88,8 @@ bool AS7341::readAllChannels(uint16_t *readings_buffer)
     m_rawValues[8] = m_channel_readings[AS7341_CHANNEL_CLEAR];
     m_rawValues[9] = m_channel_readings[AS7341_CHANNEL_NIR];
 
-    return result;
+    // TODO get rid of boolean returns! exceptions?
+    return true;
 }
 
 // delay while waiting for data, with option to time out and recover
