@@ -3,7 +3,6 @@
 
 #include <algorithm>
 #include <array>
-#include <iostream> // TODO remove
 #include <mcp2221_dll_um.h>
 #include <windows.h> // Sleep()
 
@@ -22,13 +21,15 @@ AS7341::~AS7341()
 // init
 bool AS7341::init()
 {
-    // printf("Init AS7341 at address 0x%02X\n", m_i2c_address);
+    uint8_t ids[3];
+    m_i2c.readRegister(AS7341_AUXID, ids, 3);
+
+    printf("Device ID = 0x%X, rev ID = 0x%02X, Aux ID = 0x%02X\n", ids[2], ids[1] & 0xF, ids[0] & 0x7);
 
     // make sure we're talking to the right chip
-    uint8_t who = m_i2c.readRegisterByte(AS7341_WHOAMI);
-    if ((who & 0xFC) != (AS7341_CHIP_ID << 2))
+    if ((ids[2] & 0xFC) != (AS7341_CHIP_ID << 2))
     {
-        std::cerr << "ID mismatch. Wrong chip? " << std::hex << (unsigned short)who << std::endl;
+        printf("Device ID mismatch. Wrong chip? ");
         return false;
     }
 
@@ -50,7 +51,10 @@ bool AS7341::readAllChannels(uint16_t *readings_buffer)
 
     bool low_success = m_i2c.readRegister(AS7341_CH0_DATA_L, (uint8_t *)readings_buffer, 12);
 
-    getAStatus();
+    if (m_isSaturated)
+    {
+        printf("Saturated\n");
+    }
 
     // read high channels
     setSMUXLowChannels(false);
@@ -65,6 +69,18 @@ bool AS7341::readAllChannels(uint16_t *readings_buffer)
     {
         printf("Saturated\n");
     }
+
+    // strip out CLEAR and NIR channels in the middle
+    m_rawValues[0] = m_channel_readings[AS7341_CHANNEL_F1];
+    m_rawValues[1] = m_channel_readings[AS7341_CHANNEL_F2];
+    m_rawValues[2] = m_channel_readings[AS7341_CHANNEL_F3];
+    m_rawValues[3] = m_channel_readings[AS7341_CHANNEL_F4];
+    m_rawValues[4] = m_channel_readings[AS7341_CHANNEL_F5];
+    m_rawValues[5] = m_channel_readings[AS7341_CHANNEL_F6];
+    m_rawValues[6] = m_channel_readings[AS7341_CHANNEL_F7];
+    m_rawValues[7] = m_channel_readings[AS7341_CHANNEL_F8];
+    m_rawValues[8] = m_channel_readings[AS7341_CHANNEL_CLEAR];
+    m_rawValues[9] = m_channel_readings[AS7341_CHANNEL_NIR];
 
     return result;
 }
@@ -284,7 +300,11 @@ uint8_t AS7341::getATIME()
 // set ASTEP
 bool AS7341::setASTEP(uint16_t astep_value)
 {
-    return m_i2c.writeRegister(AS7341_ASTEP_L, (uint8_t *)&astep_value, 2);
+    // return m_i2c.writeRegister(AS7341_ASTEP_L, (uint8_t *)&astep_value, 2);
+
+    m_i2c.writeRegisterByte(AS7341_ASTEP_L, 0x57);
+    m_i2c.writeRegisterByte(AS7341_ASTEP_H, 0x02);
+    return true;
 }
 
 // get ASTEP
@@ -312,11 +332,13 @@ bool AS7341::setGain(as7341_gain gain_value)
 // get ADC gain multiplier
 as7341_gain AS7341::getGain()
 {
-    // AGC todo
-    if (m_useAutoGain)
-    {
-        return m_gainStatus;
-    }
+    return m_useAutoGain ? m_gainStatus : static_cast<as7341_gain>(m_i2c.readRegisterByte(AS7341_CFG1));
+
+    // AGC
+    // if (m_useAutoGain)
+    //{
+    //    return m_gainStatus;
+    //}
 
     return static_cast<as7341_gain>(m_i2c.readRegisterByte(AS7341_CFG1));
 
@@ -403,26 +425,31 @@ double AS7341::toBasicCounts(uint16_t raw)
 }
 
 // get specific color channel
-uint16_t AS7341::getChannel(as7341_color_channel_t channel) const
+uint16_t AS7341::getChannel(as7341_color_channel channel) const
 {
     return m_channel_readings[channel];
 }
 
+uint16_t AS7341::getRawValue(SpectralChannel channel) const
+{
+    return m_rawValues[channel];
+}
+
 // The higher the counts (before saturation), the better the accuracy. Changing gain or TINT will affect
 // counts.Both parameters will have different effects like FSR, noise, linearities, time, and others.
-double AS7341::getBasicCount(as7341_color_channel_t channel) const
+double AS7341::getBasicCount(SpectralChannel channel) const
 {
     return m_basicCounts[channel];
 }
 
-double AS7341::getCorrectedCount(as7341_color_channel_t channel) const
+double AS7341::getCorrectedCount(SpectralChannel channel) const
 {
     return m_correctedCounts[channel];
 }
 
 void AS7341::getCorrectedCounts(double counts[]) const
 {
-    for (uint8_t i = 0; i < 10; i++)
+    for (uint8_t i = CHANNEL_F1; i < CHANNEL_F8; i++)
         counts[i] = m_correctedCounts[i];
     // std::array<double, 10> counts = m_correctedCounts;
     // return &m_correctedCounts[0];
@@ -430,29 +457,34 @@ void AS7341::getCorrectedCounts(double counts[]) const
 
 void AS7341::calculateBasicCounts()
 {
-    // for (uint8_t channel = 0; channel < 10; channel++)
-    //{
-    //	m_basicCounts[channel] = toBasicCounts(m_channel_readings[channel]);
-    // }
+    for (uint8_t channel = CHANNEL_F1; channel < CHANNEL_F8; channel++)
+    {
+        m_basicCounts[channel] = toBasicCounts(m_rawValues[channel]);
+    }
 
-    // strip out CLEAR and NIR channels in the middle
-    m_basicCounts[0] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F1]);
-    m_basicCounts[1] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F2]);
-    m_basicCounts[2] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F3]);
-    m_basicCounts[3] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F4]);
-    m_basicCounts[4] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F5]);
-    m_basicCounts[5] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F6]);
-    m_basicCounts[6] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F7]);
-    m_basicCounts[7] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F8]);
-    m_basicCounts[8] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_CLEAR_0]);
-    m_basicCounts[9] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_NIR_0]);
+    //// strip out CLEAR and NIR channels in the middle
+    // m_basicCounts[0] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F1]);
+    // m_basicCounts[1] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F2]);
+    // m_basicCounts[2] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F3]);
+    // m_basicCounts[3] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F4]);
+    // m_basicCounts[4] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F5]);
+    // m_basicCounts[5] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F6]);
+    // m_basicCounts[6] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F7]);
+    // m_basicCounts[7] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_F8]);
+
+    // remove completely?
+    // if (MAX_CHANNEL > AS7341_CHANNEL_F8)
+    //{
+    //    m_basicCounts[8] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_CLEAR_0]);
+    //    m_basicCounts[9] = toBasicCounts(m_channel_readings[AS7341_CHANNEL_NIR_0]);
+    //}
 }
 
 void AS7341::applyGainCorrection(double corrections[])
 {
     as7341_gain gain = getGain();
 
-    for (uint8_t channel = 0; channel < 10; channel++)
+    for (uint8_t channel = CHANNEL_F1; channel < CHANNEL_F8; channel++)
     {
         m_basicCounts[channel] *= corrections[gain];
     }
@@ -462,7 +494,7 @@ void AS7341::applyGainCorrection(double corrections[])
 // value = correctionFactor * (basic counts - offsetCompensationValue)
 void AS7341::calculateDataSensorCorrection()
 {
-    for (uint8_t channel = 0; channel < 10; channel++)
+    for (uint8_t channel = CHANNEL_F1; channel < CHANNEL_F8; channel++)
     {
         // TODO
         // m_correctedCounts[channel] = correctionFactors[channel] * (m_basicCounts[channel] -
@@ -479,7 +511,7 @@ void AS7341::normalise()
     double highestValue(0);
 
     // std::max not compiling
-    for (uint8_t i = 0; i < 10; i++)
+    for (uint8_t i = CHANNEL_F1; i < CHANNEL_F8; i++)
     {
         if (m_correctedCounts[i] > highestValue)
             highestValue = m_correctedCounts[i];
@@ -487,7 +519,7 @@ void AS7341::normalise()
 
     printf("max = %f\n", highestValue);
 
-    for (uint8_t i = 0; i < 10; i++)
+    for (uint8_t i = CHANNEL_F1; i < CHANNEL_F8; i++)
         m_correctedCounts[i] /= highestValue;
 }
 
@@ -505,8 +537,8 @@ void AS7341::setAutoGain(bool enable)
     if (!enable)
         return;
 
-    // set spectral threshold channel (SP_TH_CH) to use ADC4 (CLEAR channel)
-    uint8_t thresholdChannel = 4;
+    // set spectral threshold channel (SP_TH_CH) to use ADC3 (F8 channel)
+    uint8_t thresholdChannel = AS7341_ADC_CHANNEL_3;
 
     uint8_t cfg12_reg = m_i2c.readRegisterByte(AS7341_CFG12);
     cfg12_reg = m_i2c.modifyRegisterMultipleBit(cfg12_reg, thresholdChannel, 0, 2);
@@ -520,6 +552,8 @@ void AS7341::setAutoGain(bool enable)
     uint8_t lowHysteresis = AGC_L_50;
     uint8_t highHysteresis = AGC_H_87;
 
+    // The threshold is automatically calculated internally as a percentage of full - scale.Note that full - scale is
+    // equal to(ATIME + 1) x(ASTEP + 1).
     uint8_t cfg10_reg = m_i2c.readRegisterByte(AS7341_CFG10);
     cfg10_reg = m_i2c.modifyRegisterMultipleBit(cfg10_reg, lowHysteresis, 4, 2);
     cfg10_reg = m_i2c.modifyRegisterMultipleBit(cfg10_reg, highHysteresis, 6, 2);

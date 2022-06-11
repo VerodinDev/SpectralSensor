@@ -77,9 +77,56 @@ void spectralReconstruction()
     //  {S380nm} = spectralCorrectionMatrix{cor 380nm F1 ... cor 380nm Fn} * {ch F1(t)}
 }
 
+void takeReading(AS7341 &sensor)
+{
+    sensor.readAllChannels();
+
+    // sensor.enableLED(false);
+
+    sensor.calculateBasicCounts();
+    sensor.applyGainCorrection(tstGainCorrections);
+    sensor.calculateDataSensorCorrection();
+
+    // apply corrections
+    double correctedCounts[10];
+    sensor.getCorrectedCounts(correctedCounts);
+
+    // output channel raw and corrected counts
+    printf("\n");
+    for (uint8_t channel = CHANNEL_F1; channel < CHANNEL_F8; channel++)
+    {
+        printf("F%d %d\t %f \n", channel, sensor.getRawValue(static_cast<SpectralChannel>(channel)),
+               sensor.getCorrectedCount(static_cast<SpectralChannel>(channel)));
+    }
+    printf("\n");
+
+    // put in matrix
+    double countMatrix[CHANNEL_F8][1] = {0};
+    for (int i = 0; i < CHANNEL_F8; i++)
+    {
+        countMatrix[i][0] = correctedCounts[i];
+    }
+
+    // get XYZ
+    double X(0), Y(0), Z(0);
+    Spectrum::countsToXYZ(calibrationMatrix, countMatrix, X, Y, Z);
+    printf("X = %f, Y = %f, Z = %f\n", X, Y, Z);
+
+    double x(0), y(0);
+    double XYZsum = X + Y + Z;
+    x = X / XYZsum;
+    y = Y / XYZsum;
+
+    // CCT and duv
+    uint16_t cct = Spectrum::CIE1931_xy_to_CCT(x, y);
+    double duv = Spectrum::CIE1931_xy_to_duv(x, y);
+    printf("CCT = %dK, Duv = %f\n", cct, duv);
+    printf("******************\n");
+}
+
 int main()
 {
-    printf("SpectralSensor");
+    printf("*** Spectral sensor v0.1 ***\n");
 
     //*********DEBUG***********
     // checkChannelDataCalcs();
@@ -106,71 +153,14 @@ int main()
     // uint16_t astep = sensor.getASTEP();
     // exit(100);
     sensor.setGain(AS7341_GAIN_32X);
-    sensor.setAutoGain(false);
+    sensor.setAutoGain(true);
 
     // sensor.setLEDCurrent(15);
     //  sensor.enableLED(true);
 
-    sensor.readAllChannels();
-
-    // sensor.enableLED(false);
-
-    sensor.calculateBasicCounts();
-    sensor.applyGainCorrection(tstGainCorrections);
-    sensor.calculateDataSensorCorrection();
-
-    // apply corrections
-    double correctedCounts[10];
-    sensor.getCorrectedCounts(correctedCounts);
-
-    std::cout << std::endl;
-    std::cout << "F1 415nm (violet): " << sensor.getChannel(AS7341_CHANNEL_F1) << "\t"
-              << sensor.getBasicCount(AS7341_CHANNEL_F1) << "\t" << sensor.getCorrectedCount(AS7341_CHANNEL_F1)
-              << std::endl;
-    std::cout << "F2 445nm (blue)  : " << sensor.getChannel(AS7341_CHANNEL_F2) << "\t"
-              << sensor.getBasicCount(AS7341_CHANNEL_F2) << "\t" << sensor.getCorrectedCount(AS7341_CHANNEL_F2)
-              << std::endl;
-    std::cout << "F3 480nm (l blue): " << sensor.getChannel(AS7341_CHANNEL_F3) << "\t"
-              << sensor.getBasicCount(AS7341_CHANNEL_F3) << "\t" << sensor.getCorrectedCount(AS7341_CHANNEL_F3)
-              << std::endl;
-    std::cout << "F4 515nm (azure) : " << sensor.getChannel(AS7341_CHANNEL_F4) << "\t"
-              << sensor.getBasicCount(AS7341_CHANNEL_F4) << "\t" << sensor.getCorrectedCount(AS7341_CHANNEL_F4)
-              << std::endl;
-    std::cout << "F5 555nm (green) : " << sensor.getChannel(AS7341_CHANNEL_F5) << "\t"
-              << sensor.getBasicCount(AS7341_CHANNEL_F5) << "\t" << sensor.getCorrectedCount(AS7341_CHANNEL_F5)
-              << std::endl;
-    std::cout << "F6 590nm (yellow): " << sensor.getChannel(AS7341_CHANNEL_F6) << "\t"
-              << sensor.getBasicCount(AS7341_CHANNEL_F6) << "\t" << sensor.getCorrectedCount(AS7341_CHANNEL_F6)
-              << std::endl;
-    std::cout << "F7 630nm (amber) : " << sensor.getChannel(AS7341_CHANNEL_F7) << "\t"
-              << sensor.getBasicCount(AS7341_CHANNEL_F7) << "\t" << sensor.getCorrectedCount(AS7341_CHANNEL_F7)
-              << std::endl;
-    std::cout << "F8 680nm (red)   : " << sensor.getChannel(AS7341_CHANNEL_F8) << "\t"
-              << sensor.getBasicCount(AS7341_CHANNEL_F8) << "\t" << sensor.getCorrectedCount(AS7341_CHANNEL_F8)
-              << std::endl;
-    std::cout << "Clear            : " << sensor.getChannel(AS7341_CHANNEL_CLEAR) << std::endl;
-    std::cout << "Near IR          : " << sensor.getChannel(AS7341_CHANNEL_NIR) << std::endl;
-    std::cout << std::endl;
-
-    // put in matrix
-    double countMatrix[10][1];
-    for (int i = 0; i < 10; i++)
+    // take n readings
+    for (uint8_t readings = 0; readings < 10; readings++)
     {
-        countMatrix[i][0] = correctedCounts[i];
+        takeReading(sensor);
     }
-
-    // get XYZ
-    double X(0), Y(0), Z(0);
-    Spectrum::countsToXYZ(calibrationMatrix, countMatrix, X, Y, Z);
-    printf("X = %f, Y = %f, Z = %f\n", X, Y, Z);
-
-    double x(0), y(0);
-    double XYZsum = X + Y + Z;
-    x = X / XYZsum;
-    y = Y / XYZsum;
-
-    // CCT and duv
-    uint16_t cct = Spectrum::CIE1931_xy_to_CCT(x, y);
-    double duv = Spectrum::CIE1931_xy_to_duv(x, y);
-    printf("CCT = %dK, Duv = %f\n", cct, duv);
 }

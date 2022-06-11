@@ -6,8 +6,7 @@ namespace
 {
 
 const uint8_t AS7341_I2CADDR_DEFAULT = 0x39; ///< AS7341 default i2c address
-const uint8_t AS7341_CHIP_ID = 0x09;         ///< AS7341 default device id from WHOAMI
-const uint8_t AS7341_WHOAMI = 0x92;          ///< Chip ID register
+const uint8_t AS7341_CHIP_ID = 0x09;         ///< AS7341 default device id
 
 const uint8_t AS7341_ASTATUS_SYND = 0x60;    ///< AS7341_ASTATUS, SYND mode
 const uint8_t AS7341_CH0_DATA_L_SYND = 0x61; ///< AS7341_CH0_DATA_L, SYND mode
@@ -91,7 +90,7 @@ enum as7341_gain
     AS7341_GAIN_64X,
     AS7341_GAIN_128X,
     AS7341_GAIN_256X,
-    AS7341_GAIN_512X,
+    AS7341_GAIN_512X
 };
 
 // SMUX configuration commands
@@ -110,11 +109,11 @@ enum as7341_adc_channel
     AS7341_ADC_CHANNEL_2,
     AS7341_ADC_CHANNEL_3,
     AS7341_ADC_CHANNEL_4,
-    AS7341_ADC_CHANNEL_5,
+    AS7341_ADC_CHANNEL_5
 };
 
 // spectral channel specifiers
-enum as7341_color_channel_t
+enum as7341_color_channel
 {
     AS7341_CHANNEL_F1,
     AS7341_CHANNEL_F2,
@@ -127,7 +126,7 @@ enum as7341_color_channel_t
     AS7341_CHANNEL_F7,
     AS7341_CHANNEL_F8,
     AS7341_CHANNEL_CLEAR,
-    AS7341_CHANNEL_NIR,
+    AS7341_CHANNEL_NIR
 };
 
 // The number of measurement cycles with spectral data outside of a threshold required to trigger an interrupt
@@ -155,7 +154,7 @@ enum as7341_color_channel_t
 enum as7341_gpio_dir
 {
     AS7341_GPIO_OUTPUT, ///< THhe GPIO pin is configured as an open drain output
-    AS7341_GPIO_INPUT,  ///< The GPIO Pin is set as a high-impedence input
+    AS7341_GPIO_INPUT   ///< The GPIO Pin is set as a high-impedence input
 };
 
 // wait states for async reading
@@ -164,7 +163,7 @@ enum as7341_waiting
     AS7341_WAITING_START,
     AS7341_WAITING_LOW,
     AS7341_WAITING_HIGH,
-    AS7341_WAITING_DONE,
+    AS7341_WAITING_DONE
 };
 
 // AGC signal hysteresis

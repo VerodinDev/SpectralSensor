@@ -148,10 +148,10 @@ double correctionFactors[10] =
 //CorrectionGain = 1.057724938; 1.04913698; 1.047883152; 1.049114772; 1.020740724; 1.015773647; 1.010904254; 1.0; 1.000322557; 0.987308373; 0.959349244
 
 /* 
-General Spectral Correction Matrix for Golden Device("Created" Reference Device
-from gathered production - device data) - Based on Full, Production - Wide
-Device - Characteristic Dataset(not a per - device, so gives good, but not
-perfect results - Supports production without per - unit calibration)
+General Spectral Correction Matrix for Golden Device (source CM_L1_v1_0_0#spectral.csv)
+("Created" Reference Device from gathered production - device data) - Based on
+Full, Production - Wide Device - Characteristic Dataset(not a per - device, so gives
+ood, but not perfect results - Supports production without per - unit calibration)
 
 380 to 1000nm, step size 1nm
 

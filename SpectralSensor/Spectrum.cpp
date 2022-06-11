@@ -1,7 +1,8 @@
 #include "Spectrum.h"
 
-#include "AS7341_values.h"
+#include "AS7341_values.h"  // sensor specific calibration matrix
 #include <cmath>
+#include "AS7341.h"
 
 void Spectrum::countsToXYZ(double correctionMatrix[][10], double countMatrix[][1], double &X, double &Y, double &Z)
 {
@@ -103,8 +104,8 @@ double Spectrum::CIE1931_xy_to_duv(double x, double y)
 void Spectrum::multiplyMatrices(double correctionMatrix[][10], double countMatrix[][1], double product[][1])
 {
     // columns of matrix A must be equal to rows of matrix B
-    int rowA = 3, colA = 10;
-    int rowB = 10, colB = 1;
+    int rowA = 3, colA = CHANNEL_F8;
+    int rowB = CHANNEL_F8, colB = 1;
     int i, j, k;
 
     // init

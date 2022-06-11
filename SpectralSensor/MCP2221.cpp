@@ -124,6 +124,7 @@ bool MCP2221::writeRegister(uint8_t reg, uint8_t* i2cTxData, uint16_t size)
 	uint8_t data[8 + 1] = { 0x00 };
 	data[0] = reg;
 
+	// reads back 0x357
 	// append data (LSB first)
 	// astep 599 = 0x257 -> CA 57 02
 	for (uint16_t i = 0; i < size; i++)
@@ -131,6 +132,7 @@ bool MCP2221::writeRegister(uint8_t reg, uint8_t* i2cTxData, uint16_t size)
 		data[i + 1] = i2cTxData[i];
 	}
 
+	// ?
 	//uint8_t endi[8 + 1] = { 0x00 };
 	//for (uint16_t i = 0; i < size; i++)
 	//{

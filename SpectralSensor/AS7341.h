@@ -4,10 +4,24 @@
 #include "MCP2221.h"
 #include <stdint.h>
 
+enum SpectralChannel
+{
+    CHANNEL_F1,
+    CHANNEL_F2,
+    CHANNEL_F3,
+    CHANNEL_F4,
+    CHANNEL_F5,
+    CHANNEL_F6,
+    CHANNEL_F7,
+    CHANNEL_F8,
+    CHANNEL_CLEAR,
+    CHANNEL_NIR
+};
+
 // TODO
 struct ChannelValues
 {
-    as7341_color_channel_t channel;
+    as7341_color_channel channel;
     uint16_t raw;
     double basicCount;
     double correctedCount;
@@ -56,15 +70,16 @@ class AS7341
     void calculateDataSensorCorrection();
 
     // getters
-    uint16_t getChannel(as7341_color_channel_t channel) const;
-    double getBasicCount(as7341_color_channel_t channel) const;
-    double getCorrectedCount(as7341_color_channel_t channel) const;
+    uint16_t getChannel(as7341_color_channel channel) const;
+    uint16_t getRawValue(SpectralChannel channel) const;
+    double getBasicCount(SpectralChannel channel) const;
+    double getCorrectedCount(SpectralChannel channel) const;
     void getCorrectedCounts(double[]) const;
 
   private:
     // AS7341();
 
-    bool enableSMUX(void);
+    bool enableSMUX();
     bool setSMUXCommand(as7341_smux_cmd command);
     void setSMUXLowChannels(bool f1_f4);
     void normalise();
@@ -80,6 +95,7 @@ class AS7341
     uint8_t m_last_spectral_int_source;
 
     uint16_t m_channel_readings[12];
+    uint16_t m_rawValues[10];
     double m_basicCounts[10];
     double m_correctedCounts[10];
     double m_normalisedValues[10];
