@@ -44,6 +44,28 @@ bool AS7341::readAllChannels(uint16_t *readings_buffer)
 
     // uint16_t buffer[12] = { 0x00 };
 
+    // TODO cleanup and make efficient (e.g. don't switch SMUX so many times)
+    // get gain value
+    setAutoGain(true);
+
+    // read high channels
+    setSMUXLowChannels(false);
+    enableSpectralMeasurement(true);
+    delayForData(0);
+
+    m_i2c.readRegister(AS7341_CH0_DATA_L, (uint8_t*)&readings_buffer[6], 12);
+
+    getAStatus();
+
+    if (m_isSaturated)
+    {
+        printf("Saturated\n");
+    }
+
+    setAutoGain(false);
+
+    // now take actual readings
+
     // read low channels
     setSMUXLowChannels(true);
     enableSpectralMeasurement(true);
@@ -51,10 +73,10 @@ bool AS7341::readAllChannels(uint16_t *readings_buffer)
 
     bool low_success = m_i2c.readRegister(AS7341_CH0_DATA_L, (uint8_t *)readings_buffer, 12);
 
-    if (m_isSaturated)
-    {
-        printf("Saturated\n");
-    }
+    //if (m_isSaturated)
+    //{
+    //    printf("Saturated\n");
+    //}
 
     // read high channels
     setSMUXLowChannels(false);
@@ -63,12 +85,12 @@ bool AS7341::readAllChannels(uint16_t *readings_buffer)
 
     bool result = low_success && m_i2c.readRegister(AS7341_CH0_DATA_L, (uint8_t *)&readings_buffer[6], 12);
 
-    getAStatus();
+    //getAStatus();
 
-    if (m_isSaturated)
-    {
-        printf("Saturated\n");
-    }
+    //if (m_isSaturated)
+    //{
+    //    printf("Saturated\n");
+    //}
 
     // strip out CLEAR and NIR channels in the middle
     m_rawValues[0] = m_channel_readings[AS7341_CHANNEL_F1];

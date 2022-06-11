@@ -156,7 +156,7 @@ int main()
     // uint16_t astep = sensor.getASTEP();
     // exit(100);
     sensor.setGain(AS7341_GAIN_32X);
-    sensor.setAutoGain(true);
+    //sensor.setAutoGain(true);
 
     // take n readings
     for (uint8_t readings = 0; readings < 10; readings++)
