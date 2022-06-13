@@ -60,8 +60,9 @@ uint16_t Spectrum::CIE1931_xy_to_CCT(double x, double y)
 {
     // See below for the formula used to approximate CCT using CIE 1931 xy values :
     // McCamy's approximation
-    // from AMS excel. Note these number vary slightly from wikipedia... don't know why yet
-    // CCT(x,y)=-449n^{3}+3525n^{2}-6823.3n+5520.33
+    // Source: AMS excel
+    // Note 1: differs from wikipedia: CCT(x,y)=-449n^{3}+3525n^{2}-6823.3n+5520.33
+    // Note 2: waveformlighting.com uses same formula as AMS
 
     double n = (x - 0.3320) / (0.1858 - y);
     uint16_t cct = static_cast<uint16_t>(437 * pow(n, 3) + 3601 * pow(n, 2) + 6861 * n + 5517);
@@ -109,7 +110,7 @@ void Spectrum::reconstructSpectrum(double spectralMatrix[][10], double countMatr
     //380 - 780nm, 1nm steps = 401
     //double spectrum[401][1];    // todo dynamically allocate
 
-    multiplyMatrices(spectralMatrix, countMatrix, reconstructedSpectrum, wavelengths, AS7341_CHANNEL_NIR);
+    multiplyMatrices(spectralMatrix, countMatrix, reconstructedSpectrum, wavelengths, 10);
 
     // normalised
     //= O10 / MAX($O$10:$O$630)

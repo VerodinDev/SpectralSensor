@@ -14,7 +14,7 @@ int main()
     sensor.checkCIE1931Calcs(10);
     //sensor.checkCIE1931Calcs(CHANNEL_F8);
 
-    //sensor.verifySpectralReconstruction();
+    sensor.verifySpectralReconstruction();
 
 #else
 

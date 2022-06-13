@@ -166,7 +166,7 @@ void SpectralSensor::verifySpectralReconstruction()
     double reconstructedSpectrum[wavelengths][1];
     Spectrum::reconstructSpectrum(spectralCorrectionMatrix, tstCorrectedCounts, reconstructedSpectrum, wavelengths);
 
-    for (uint16_t wavelength = CHANNEL_F1; wavelength <= CHANNEL_NIR; wavelength++)
+    for (uint16_t wavelength = 0; wavelength < 20; wavelength++)
     {
         printf("Wavelength %d = %f\n", wavelength + 380, reconstructedSpectrum[wavelength][0]);
     }
