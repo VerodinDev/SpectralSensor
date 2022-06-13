@@ -76,9 +76,7 @@ void SpectralSensor::takeReading()
 
     // get xy
     double x(0), y(0);
-    double XYZsum = X + Y + Z;
-    x = X / XYZsum;
-    y = Y / XYZsum;
+    Spectrum::XYZtoXy(X, Y, Z, x, y);
     printf("x = %f, y = %f\n", x, y);
 
     // CCT and duv
@@ -92,7 +90,6 @@ void SpectralSensor::takeReading()
 
 #ifdef VERIFY_CALCS
 
-// not updated after creation of SpectralSensor class
 void SpectralSensor::checkChannelDataCalcs()
 {
     uint16_t raw = 1236;
@@ -142,12 +139,10 @@ void SpectralSensor::checkCIE1931Calcs(uint8_t noOfChannels)
 
     printf("X = %f, Y = %f, Z = %f\n", X, Y, Z);
 
-    double XYZsum = (X + Y + Z);
-    double x = X / XYZsum;
-    double y = Y / XYZsum;
-    double z = Z / XYZsum;
-
-    printf("x = %f, y = %f, z = %f\n", x, y, z);
+    // get xy
+    double x(0), y(0);
+    Spectrum::XYZtoXy(X, Y, Z, x, y);
+    printf("x = %f, y = %f\n", x, y);
 
     // CCT and duv
     uint16_t cct = Spectrum::CIE1931_xy_to_CCT(x, y);

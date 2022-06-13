@@ -6,7 +6,7 @@ class MCP2221;
 class AS7341;
 
 // enable calc veridifcation against example values in AMS excel
-//#define VERIFY_CALCS
+#define VERIFY_CALCS
 
 class SpectralSensor
 {

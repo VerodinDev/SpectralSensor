@@ -56,6 +56,14 @@ void Spectrum::spectrumToXYZ(double cie1931[][3], double spectralData[], double 
 //	//*z = Z / XYZsum;
 // }
 
+void Spectrum::XYZtoXy(const double X, const double Y, const double Z, double& x, double& y)
+{   
+    double XYZsum = X + Y + Z;
+
+    x = X / XYZsum;
+    y = Y / XYZsum;
+}
+
 uint16_t Spectrum::CIE1931_xy_to_CCT(double x, double y)
 {
     // See below for the formula used to approximate CCT using CIE 1931 xy values :
