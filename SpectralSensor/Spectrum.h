@@ -8,6 +8,8 @@ class Spectrum
     // AS7341 counts to XYZ
     static void countsToXYZ(double correctionMatrix[][10], double countMatrix[][1], double &X, double &Y, double &Z);
 
+    static void spectrumToXYZ_AMS(double spectralData[][1], double& X, double& Y, double& Z, const uint16_t wavelengths);
+
     // spectrum to XYZ
     static void spectrumToXYZ(double cie1931[][3], double spectralData[], double &X, double &Y, double &Z);
 

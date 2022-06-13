@@ -54,7 +54,7 @@ void SpectralSensor::takeReading()
     printf("\n");
     for (uint8_t channel = CHANNEL_F1; channel <= CHANNEL_F8; channel++)
     {
-        printf("F%d\t%d\t %f \n", channel, m_pSensor->getRawValue(static_cast<SpectralChannel>(channel)),
+        printf("F%d\t%d\t %f \n", channel + 1, m_pSensor->getRawValue(static_cast<SpectralChannel>(channel)),
                m_pSensor->getCorrectedCount(static_cast<SpectralChannel>(channel)));
     }
     printf("Clear\t%d\t %f \n", m_pSensor->getRawValue(CHANNEL_CLEAR), m_pSensor->getCorrectedCount(CHANNEL_CLEAR));
@@ -155,6 +155,7 @@ void SpectralSensor::verifySpectralReconstruction()
     printf("\n*** verify spectral reconstruction ***\n");
 
     const uint16_t wavelengths = 1000 - 380;
+    const uint16_t visibleWavelengths = 780 - 380;
 
     double reconstructedSpectrum[wavelengths][1];
     Spectrum::reconstructSpectrum(spectralCorrectionMatrix, tstCorrectedCounts, reconstructedSpectrum, wavelengths);
@@ -164,6 +165,25 @@ void SpectralSensor::verifySpectralReconstruction()
     {
         printf("Wavelength %d = %f\n", wavelength + 380, reconstructedSpectrum[wavelength][0]);
     }
+
+    // spectrum to XYZ
+    double X(0);
+    double Y(0);
+    double Z(0);
+
+    Spectrum::spectrumToXYZ_AMS(reconstructedSpectrum, X, Y, Z, visibleWavelengths);
+
+    printf("X = %f, Y = %f, Z = %f\n", X, Y, Z);
+
+    // get xy
+    double x(0), y(0);
+    Spectrum::XYZtoXy(X, Y, Z, x, y);
+    printf("x = %f, y = %f\n", x, y);
+
+    // CCT and duv
+    uint16_t cct = Spectrum::CIE1931_xy_to_CCT(x, y);
+    double duv = Spectrum::CIE1931_xy_to_duv(x, y);
+    printf("CCT = %dK, duv = %f\n", cct, duv);
 }
 
 #endif

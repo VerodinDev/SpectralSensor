@@ -16,6 +16,17 @@ void Spectrum::countsToXYZ(double correctionMatrix[][10], double countMatrix[][1
     Z = XYZ[2][0];
 }
 
+// AMS
+void Spectrum::spectrumToXYZ_AMS(double spectralData[][1], double& X, double& Y, double& Z, const uint16_t wavelengths)
+{
+    for (uint16_t i = 0; i < wavelengths; i++)
+    {
+        X += spectralData[i][0] * cie1931[i][0];
+        Y += spectralData[i][0] * cie1931[i][1];
+        Z += spectralData[i][0] * cie1931[i][2];
+    }
+}
+
 // X=0.499541, Y=0.361878, Z=0.105754
 //
 // https://www.waveformlighting.com/tech/calculate-color-temperature-cct-from-cie-1931-xy-coordinates/
@@ -117,21 +128,21 @@ void Spectrum::reconstructSpectrum(double spectralMatrix[][10], double countMatr
 {
     multiplyMatrices(spectralMatrix, countMatrix, reconstructedSpectrum, wavelengths, 10);
 
-    // normalise
-    double highestValue(0);
+    //// normalise
+    //double highestValue(0);
 
-    for (uint16_t i = 0; i < wavelengths; i++)
-    {
-        if (reconstructedSpectrum[i][0] > highestValue)
-        {
-            highestValue = reconstructedSpectrum[i][0];
-        }
-    }
-
-    for (uint16_t i = 0; i < wavelengths; i++)
-    {
-        reconstructedSpectrum[i][0] /= highestValue;
-    }
+    //for (uint16_t i = 0; i < wavelengths; i++)
+    //{
+    //    if (reconstructedSpectrum[i][0] > highestValue)
+    //    {
+    //        highestValue = reconstructedSpectrum[i][0];
+    //    }
+    //}
+    //
+    //for (uint16_t i = 0; i < wavelengths; i++)
+    //{
+    //    reconstructedSpectrum[i][0] /= highestValue;
+    //}
 }
 
 // excel, photometric results
