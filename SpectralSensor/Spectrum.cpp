@@ -9,7 +9,7 @@ void Spectrum::countsToXYZ(double correctionMatrix[][10], double countMatrix[][1
     const uint8_t rows = 3; // xyz values
 
     double XYZ[rows][1];
-    multiplyMatrices(calibrationMatrix, countMatrix, XYZ, rows, CHANNEL_NIR);
+    multiplyMatrices(calibrationMatrix, countMatrix, XYZ, rows, 10);
 
     X = XYZ[0][0];
     Y = XYZ[1][0];
@@ -107,7 +107,7 @@ double Spectrum::CIE1931_xy_to_duv(double x, double y)
 void Spectrum::reconstructSpectrum(double spectralMatrix[][10], double countMatrix[][1], double reconstructedSpectrum[][1], const uint16_t wavelengths)
 {
     //380 - 780nm, 1nm steps = 401
-    double spectrum[401][1];    // todo dynamically allocate
+    //double spectrum[401][1];    // todo dynamically allocate
 
     multiplyMatrices(spectralMatrix, countMatrix, reconstructedSpectrum, wavelengths, AS7341_CHANNEL_NIR);
 
@@ -143,7 +143,7 @@ void Spectrum::multiplyMatrices(double correctionMatrix[][10], double countMatri
     {
         for (j = 0; j < colB; j++)
         {
-            for (k = 0; k <= colA; k++)
+            for (k = 0; k < colA; k++)
             {
                 product[i][j] += correctionMatrix[i][k] * countMatrix[k][j];
                 //printf("i=%d j=%d k=%d\n", i, j, k); OK

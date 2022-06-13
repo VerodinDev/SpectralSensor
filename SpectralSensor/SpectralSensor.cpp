@@ -63,7 +63,7 @@ void SpectralSensor::takeReading()
 
     // put in matrix
     double countMatrix[10][1] = {0};
-    for (int i = 0; i <= CHANNEL_NIR; i++)
+    for (int i = 0; i < 10; i++)
     {
         countMatrix[i][0] = correctedCounts[i];
         //printf("i=%d\n", i); OK
@@ -74,10 +74,12 @@ void SpectralSensor::takeReading()
     Spectrum::countsToXYZ(calibrationMatrix, countMatrix, X, Y, Z);
     printf("X = %f, Y = %f, Z = %f\n", X, Y, Z);
 
+    // get xy
     double x(0), y(0);
     double XYZsum = X + Y + Z;
     x = X / XYZsum;
     y = Y / XYZsum;
+    printf("x = %f, y = %f\n", x, y);
 
     // CCT and duv
     uint16_t cct = Spectrum::CIE1931_xy_to_CCT(x, y);
@@ -127,12 +129,12 @@ z	0.37865
 
 CCT 7413K
 */
-void SpectralSensor::checkCIE1931Calcs(uint8_t lastChannel)
+void SpectralSensor::checkCIE1931Calcs(uint8_t noOfChannels)
 {
-    printf("\n*** check CIE1931 calcs (channel 1 to %d) ***\n", lastChannel + 1);
+    printf("\n*** check CIE1931 calcs (%d channels) ***\n", noOfChannels);
 
     double XYZ[3][1];
-    Spectrum::multiplyMatrices(calibrationMatrix, tstCorrectedCounts, XYZ, 3, lastChannel);
+    Spectrum::multiplyMatrices(calibrationMatrix, tstCorrectedCounts, XYZ, 3, noOfChannels);
 
     double X = XYZ[0][0];
     double Y = XYZ[1][0];

@@ -9,7 +9,7 @@ namespace
 
 // raw counts
 // source XML v3.0
-double tstRawCounts[10] =
+uint16_t tstRawCounts[10] =
 {
 	1074,
 	1910,

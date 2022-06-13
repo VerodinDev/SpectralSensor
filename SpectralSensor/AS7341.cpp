@@ -5,6 +5,7 @@
 #include <mcp2221_dll_um.h>
 #include <stdexcept>
 #include <windows.h> // Sleep()
+#include "AS7341_values.h"
 
 using namespace std;
 
@@ -75,6 +76,15 @@ void AS7341::readAllChannels(uint16_t *readings_buffer)
 
     m_i2c.readRegister(AS7341_CH0_DATA_L, (uint8_t *)readings_buffer, 12);
 
+#ifdef VERIFY_CALCS_AS7341
+
+    for (uint8_t channel = 0; channel < 10; channel++)
+    {
+        m_rawValues[channel] = tstRawCounts[channel];
+    }
+    
+#else
+
     // strip out CLEAR and NIR channels in the middle
     m_rawValues[CHANNEL_F1] = m_channel_readings[AS7341_CHANNEL_F1];
     m_rawValues[CHANNEL_F2] = m_channel_readings[AS7341_CHANNEL_F2];
@@ -86,6 +96,8 @@ void AS7341::readAllChannels(uint16_t *readings_buffer)
     m_rawValues[CHANNEL_F8] = m_channel_readings[AS7341_CHANNEL_F8];
     m_rawValues[CHANNEL_CLEAR] = m_channel_readings[AS7341_CHANNEL_CLEAR];
     m_rawValues[CHANNEL_NIR] = m_channel_readings[AS7341_CHANNEL_NIR];
+
+#endif
 }
 
 // delay while waiting for data, with option to time out and recover
@@ -462,7 +474,7 @@ void AS7341::applyGainCorrection(double corrections[])
     for (uint8_t channel = CHANNEL_F1; channel <= CHANNEL_NIR; channel++)
     {
         m_basicCounts[channel] *= corrections[gain];
-        printf("channel %d\n", channel);
+        //printf("channel %d\n", channel);
     }
 }
 

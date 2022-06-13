@@ -11,7 +11,7 @@ int main()
     SpectralSensor sensor;
 
     //sensor.checkChannelDataCalcs();
-    sensor.checkCIE1931Calcs(CHANNEL_NIR);
+    sensor.checkCIE1931Calcs(10);
     //sensor.checkCIE1931Calcs(CHANNEL_F8);
 
     //sensor.verifySpectralReconstruction();
