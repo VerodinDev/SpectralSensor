@@ -6,8 +6,10 @@
 
 void Spectrum::countsToXYZ(double correctionMatrix[][10], double countMatrix[][1], double &X, double &Y, double &Z)
 {
-    double XYZ[3][1];
-    multiplyMatrices(calibrationMatrix, countMatrix, XYZ);
+    const uint8_t rows = 3; // xyz values
+
+    double XYZ[rows][1];
+    multiplyMatrices(calibrationMatrix, countMatrix, XYZ, rows, CHANNEL_NIR);
 
     X = XYZ[0][0];
     Y = XYZ[1][0];
@@ -36,7 +38,7 @@ void Spectrum::spectrumToXYZ(double cie1931[][3], double spectralData[], double 
     Z *= 1 / Ysum;
 }
 
-// void Spectrum::spectrum_to_xyz()
+// void Spectrum::spectrumToXYZ()
 //{
 //	//for (i = 0, lambda = 380; lambda < 780.1; i++, lambda++)
 //	//{
@@ -63,6 +65,14 @@ uint16_t Spectrum::CIE1931_xy_to_CCT(double x, double y)
 
     double n = (x - 0.3320) / (0.1858 - y);
     uint16_t cct = static_cast<uint16_t>(437 * pow(n, 3) + 3601 * pow(n, 2) + 6861 * n + 5517);
+
+    return cct;
+}
+
+uint16_t Spectrum::CIE1931_xy_to_CCT_wikipedia(double x, double y)
+{
+    double n = (x - 0.325) / (y - 0.154);
+    uint16_t cct = static_cast<uint16_t>(-449 * pow(n, 3) + 3525 * pow(n, 2) - 6823.3 * n + 5520.33);
 
     return cct;
 }
@@ -94,6 +104,17 @@ double Spectrum::CIE1931_xy_to_duv(double x, double y)
     return Lfp - Lbb;
 }
 
+void Spectrum::reconstructSpectrum(double spectralMatrix[][10], double countMatrix[][1], double reconstructedSpectrum[][1], const uint16_t wavelengths)
+{
+    //380 - 780nm, 1nm steps = 401
+    double spectrum[401][1];    // todo dynamically allocate
+
+    multiplyMatrices(spectralMatrix, countMatrix, reconstructedSpectrum, wavelengths, AS7341_CHANNEL_NIR);
+
+    // normalised
+    //= O10 / MAX($O$10:$O$630)
+}
+
 // excel, photometric results
 // correct sensor data (gain corrected * factor - offset)) 1x10 matrix
 //
@@ -101,11 +122,11 @@ double Spectrum::CIE1931_xy_to_duv(double x, double y)
 // X	n
 // Y	n
 // Z	n
-void Spectrum::multiplyMatrices(double correctionMatrix[][10], double countMatrix[][1], double product[][1])
+void Spectrum::multiplyMatrices(double correctionMatrix[][10], double countMatrix[][1], double product[][1], uint16_t rows, const uint8_t columns)
 {
     // columns of matrix A must be equal to rows of matrix B
-    int rowA = 3, colA = CHANNEL_F8;
-    int rowB = CHANNEL_F8, colB = 1;
+    int rowA = rows, colA = columns;
+    int rowB = columns, colB = 1;
     int i, j, k;
 
     // init
@@ -122,9 +143,10 @@ void Spectrum::multiplyMatrices(double correctionMatrix[][10], double countMatri
     {
         for (j = 0; j < colB; j++)
         {
-            for (k = 0; k < colA; k++)
+            for (k = 0; k <= colA; k++)
             {
                 product[i][j] += correctionMatrix[i][k] * countMatrix[k][j];
+                //printf("i=%d j=%d k=%d\n", i, j, k); OK
             }
         }
     }

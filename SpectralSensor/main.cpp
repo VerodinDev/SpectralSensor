@@ -1,9 +1,22 @@
 #include "SpectralSensor.h"
 #include <stdexcept>
+#include "AS7341.h"
 
 int main()
 {
     printf("*** Spectral sensor v0.1 ***\n");
+
+#ifdef VERIFY_CALCS
+
+    SpectralSensor sensor;
+
+    //sensor.checkChannelDataCalcs();
+    sensor.checkCIE1931Calcs(CHANNEL_NIR);
+    //sensor.checkCIE1931Calcs(CHANNEL_F8);
+
+    //sensor.verifySpectralReconstruction();
+
+#else
 
     try
     {
@@ -23,4 +36,7 @@ int main()
     {
         printf("Exception: %s\n", e.what());
     }
+
+#endif
+
 }

@@ -76,16 +76,16 @@ void AS7341::readAllChannels(uint16_t *readings_buffer)
     m_i2c.readRegister(AS7341_CH0_DATA_L, (uint8_t *)readings_buffer, 12);
 
     // strip out CLEAR and NIR channels in the middle
-    m_rawValues[0] = m_channel_readings[AS7341_CHANNEL_F1];
-    m_rawValues[1] = m_channel_readings[AS7341_CHANNEL_F2];
-    m_rawValues[2] = m_channel_readings[AS7341_CHANNEL_F3];
-    m_rawValues[3] = m_channel_readings[AS7341_CHANNEL_F4];
-    m_rawValues[4] = m_channel_readings[AS7341_CHANNEL_F5];
-    m_rawValues[5] = m_channel_readings[AS7341_CHANNEL_F6];
-    m_rawValues[6] = m_channel_readings[AS7341_CHANNEL_F7];
-    m_rawValues[7] = m_channel_readings[AS7341_CHANNEL_F8];
-    m_rawValues[8] = m_channel_readings[AS7341_CHANNEL_CLEAR];
-    m_rawValues[9] = m_channel_readings[AS7341_CHANNEL_NIR];
+    m_rawValues[CHANNEL_F1] = m_channel_readings[AS7341_CHANNEL_F1];
+    m_rawValues[CHANNEL_F2] = m_channel_readings[AS7341_CHANNEL_F2];
+    m_rawValues[CHANNEL_F3] = m_channel_readings[AS7341_CHANNEL_F3];
+    m_rawValues[CHANNEL_F4] = m_channel_readings[AS7341_CHANNEL_F4];
+    m_rawValues[CHANNEL_F5] = m_channel_readings[AS7341_CHANNEL_F5];
+    m_rawValues[CHANNEL_F6] = m_channel_readings[AS7341_CHANNEL_F6];
+    m_rawValues[CHANNEL_F7] = m_channel_readings[AS7341_CHANNEL_F7];
+    m_rawValues[CHANNEL_F8] = m_channel_readings[AS7341_CHANNEL_F8];
+    m_rawValues[CHANNEL_CLEAR] = m_channel_readings[AS7341_CHANNEL_CLEAR];
+    m_rawValues[CHANNEL_NIR] = m_channel_readings[AS7341_CHANNEL_NIR];
 }
 
 // delay while waiting for data, with option to time out and recover
@@ -441,7 +441,7 @@ double AS7341::getCorrectedCount(SpectralChannel channel) const
 
 void AS7341::getCorrectedCounts(double counts[]) const
 {
-    for (uint8_t i = CHANNEL_F1; i < CHANNEL_F8; i++)
+    for (uint8_t i = CHANNEL_F1; i <= CHANNEL_NIR; i++)
         counts[i] = m_correctedCounts[i];
     // std::array<double, 10> counts = m_correctedCounts;
     // return &m_correctedCounts[0];
@@ -449,7 +449,7 @@ void AS7341::getCorrectedCounts(double counts[]) const
 
 void AS7341::calculateBasicCounts()
 {
-    for (uint8_t channel = CHANNEL_F1; channel < CHANNEL_F8; channel++)
+    for (uint8_t channel = CHANNEL_F1; channel <= CHANNEL_NIR; channel++)
     {
         m_basicCounts[channel] = toBasicCounts(m_rawValues[channel]);
     }
@@ -459,9 +459,10 @@ void AS7341::applyGainCorrection(double corrections[])
 {
     as7341_gain gain = getGain();
 
-    for (uint8_t channel = CHANNEL_F1; channel < CHANNEL_F8; channel++)
+    for (uint8_t channel = CHANNEL_F1; channel <= CHANNEL_NIR; channel++)
     {
         m_basicCounts[channel] *= corrections[gain];
+        printf("channel %d\n", channel);
     }
 }
 
@@ -469,7 +470,7 @@ void AS7341::applyGainCorrection(double corrections[])
 // value = correctionFactor * (basic counts - offsetCompensationValue)
 void AS7341::calculateDataSensorCorrection()
 {
-    for (uint8_t channel = CHANNEL_F1; channel < CHANNEL_F8; channel++)
+    for (uint8_t channel = CHANNEL_F1; channel <= CHANNEL_NIR; channel++)
     {
         // TODO
         // m_correctedCounts[channel] = correctionFactors[channel] * (m_basicCounts[channel] -
@@ -486,7 +487,7 @@ void AS7341::normalise()
     double highestValue(0);
 
     // std::max not compiling
-    for (uint8_t i = CHANNEL_F1; i < CHANNEL_F8; i++)
+    for (uint8_t i = CHANNEL_F1; i <= CHANNEL_NIR; i++)
     {
         if (m_correctedCounts[i] > highestValue)
             highestValue = m_correctedCounts[i];
@@ -494,7 +495,7 @@ void AS7341::normalise()
 
     printf("max = %f\n", highestValue);
 
-    for (uint8_t i = CHANNEL_F1; i < CHANNEL_F8; i++)
+    for (uint8_t i = CHANNEL_F1; i <= CHANNEL_NIR; i++)
         m_correctedCounts[i] /= highestValue;
 }
 
@@ -512,8 +513,8 @@ void AS7341::enableAutoGain(bool enable)
         return;
     }
 
-    // set spectral threshold channel (SP_TH_CH) to use ADC3 (F8 channel)
-    uint8_t thresholdChannel = AS7341_ADC_CHANNEL_3;
+    // set spectral threshold channel (SP_TH_CH) to use clear channel
+    uint8_t thresholdChannel = AS7341_ADC_CHANNEL_4;
 
     uint8_t cfg12_reg = m_i2c.readRegisterByte(AS7341_CFG12);
     m_i2c.modifyRegisterMultipleBit(cfg12_reg, thresholdChannel, 0, 2);

@@ -8,56 +8,6 @@
 #include <mcp2221_dll_um.h>
 #include <stdexcept>
 
-void SpectralSensor::takeReading()
-{
-    // sensor.setLEDCurrent(15);
-    // sensor.enableLED(true);
-
-    m_pSensor->readAllChannels();
-
-    // sensor.enableLED(false);
-
-    m_pSensor->calculateBasicCounts();
-    m_pSensor->applyGainCorrection(tstGainCorrections);
-    m_pSensor->calculateDataSensorCorrection();
-
-    // apply corrections
-    double correctedCounts[10];
-    m_pSensor->getCorrectedCounts(correctedCounts);
-
-    // output channel raw and corrected counts
-    printf("\n");
-    for (uint8_t channel = CHANNEL_F1; channel < CHANNEL_F8; channel++)
-    {
-        printf("F%d %d\t %f \n", channel, m_pSensor->getRawValue(static_cast<SpectralChannel>(channel)),
-               m_pSensor->getCorrectedCount(static_cast<SpectralChannel>(channel)));
-    }
-    printf("\n");
-
-    // put in matrix
-    double countMatrix[CHANNEL_F8][1] = {0};
-    for (int i = 0; i < CHANNEL_F8; i++)
-    {
-        countMatrix[i][0] = correctedCounts[i];
-    }
-
-    // get XYZ
-    double X(0), Y(0), Z(0);
-    Spectrum::countsToXYZ(calibrationMatrix, countMatrix, X, Y, Z);
-    printf("X = %f, Y = %f, Z = %f\n", X, Y, Z);
-
-    double x(0), y(0);
-    double XYZsum = X + Y + Z;
-    x = X / XYZsum;
-    y = Y / XYZsum;
-
-    // CCT and duv
-    uint16_t cct = Spectrum::CIE1931_xy_to_CCT(x, y);
-    double duv = Spectrum::CIE1931_xy_to_duv(x, y);
-    printf("CCT = %dK, Duv = %f\n", cct, duv);
-    printf("******************\n");
-}
-
 SpectralSensor::SpectralSensor() : m_pI2cController(0), m_pSensor(0)
 {
 }
@@ -83,9 +33,65 @@ void SpectralSensor::setupAS7341()
     // m_sensor->setAutoGain(true);
 }
 
+void SpectralSensor::takeReading()
+{
+    // sensor.setLEDCurrent(15);
+    // sensor.enableLED(true);
+
+    m_pSensor->readAllChannels();
+
+    // sensor.enableLED(false);
+
+    m_pSensor->calculateBasicCounts();
+    m_pSensor->applyGainCorrection(tstGainCorrections);
+    m_pSensor->calculateDataSensorCorrection();
+
+    // apply corrections
+    double correctedCounts[10];
+    m_pSensor->getCorrectedCounts(correctedCounts);
+
+    // output channel raw and corrected counts
+    printf("\n");
+    for (uint8_t channel = CHANNEL_F1; channel <= CHANNEL_F8; channel++)
+    {
+        printf("F%d\t%d\t %f \n", channel, m_pSensor->getRawValue(static_cast<SpectralChannel>(channel)),
+               m_pSensor->getCorrectedCount(static_cast<SpectralChannel>(channel)));
+    }
+    printf("Clear\t%d\t %f \n", m_pSensor->getRawValue(CHANNEL_CLEAR), m_pSensor->getCorrectedCount(CHANNEL_CLEAR));
+    printf("NIR\t%d\t %f \n", m_pSensor->getRawValue(CHANNEL_NIR), m_pSensor->getCorrectedCount(CHANNEL_NIR));
+    printf("\n");
+
+    // put in matrix
+    double countMatrix[10][1] = {0};
+    for (int i = 0; i <= CHANNEL_NIR; i++)
+    {
+        countMatrix[i][0] = correctedCounts[i];
+        //printf("i=%d\n", i); OK
+    }
+
+    // get XYZ
+    double X(0), Y(0), Z(0);
+    Spectrum::countsToXYZ(calibrationMatrix, countMatrix, X, Y, Z);
+    printf("X = %f, Y = %f, Z = %f\n", X, Y, Z);
+
+    double x(0), y(0);
+    double XYZsum = X + Y + Z;
+    x = X / XYZsum;
+    y = Y / XYZsum;
+
+    // CCT and duv
+    uint16_t cct = Spectrum::CIE1931_xy_to_CCT(x, y);
+    uint16_t cct2 = Spectrum::CIE1931_xy_to_CCT_wikipedia(x, y);
+    double duv = Spectrum::CIE1931_xy_to_duv(x, y);
+    printf("CCT = %dK, Duv = %f\n", cct, duv);
+    printf("CCT = %dK (wikipedia)\n", cct2);
+    printf("******************\n");
+}
+
 #ifdef VERIFY_CALCS
+
 // not updated after creation of SpectralSensor class
-void checkChannelDataCalcs()
+void SpectralSensor::checkChannelDataCalcs()
 {
     uint16_t raw = 1236;
     float gain_val = 512;
@@ -101,7 +107,7 @@ void checkChannelDataCalcs()
     // double basicCount = (raw / (gain_val * tint));
     double basicCount = tstBasicCounts[0];
     double corrCount = /*correctionFactors[0]*/ 1.02811245 * (basicCount - /*offsetCompensationValues[0]*/ 0.00196979);
-    printf("raw = %d \t counts = %f \t corr = %f", raw, basicCount, corrCount);
+    printf("raw = %d \t counts = %f \t corr = %f\n", raw, basicCount, corrCount);
 }
 
 /* Photometric Results after XYZ Calibration(from xls)
@@ -121,10 +127,12 @@ z	0.37865
 
 CCT 7413K
 */
-void checkCIE1931Calcs()
+void SpectralSensor::checkCIE1931Calcs(uint8_t lastChannel)
 {
+    printf("\n*** check CIE1931 calcs (channel 1 to %d) ***\n", lastChannel + 1);
+
     double XYZ[3][1];
-    Spectrum::multiplyMatrices(calibrationMatrix, tstCorrectedCounts, XYZ);
+    Spectrum::multiplyMatrices(calibrationMatrix, tstCorrectedCounts, XYZ, 3, lastChannel);
 
     double X = XYZ[0][0];
     double Y = XYZ[1][0];
@@ -145,14 +153,21 @@ void checkCIE1931Calcs()
     printf("CCT = %dK, duv = %f\n", cct, duv);
 }
 
-// For a spectral reconstruction, a correction matrix is required, which converts the sensor signals with all
-// the filters(e.g. 8 x VIS and NIR + CLEAR = > 10) into a reconstructed spectrum according to the step
-// width(n) of the targets.
-void spectralReconstruction()
+void SpectralSensor::verifySpectralReconstruction()
 {
-    // TODO
+    printf("\n*** verify spectral reconstruction ***\n");
 
-    // double resultMatrix[400][10];
     //  {S380nm} = spectralCorrectionMatrix{cor 380nm F1 ... cor 380nm Fn} * {ch F1(t)}
+
+    const uint16_t wavelengths = 1000 - 380;
+
+    double reconstructedSpectrum[wavelengths][1];
+    Spectrum::reconstructSpectrum(spectralCorrectionMatrix, tstCorrectedCounts, reconstructedSpectrum, wavelengths);
+
+    for (uint16_t wavelength = CHANNEL_F1; wavelength <= CHANNEL_NIR; wavelength++)
+    {
+        printf("Wavelength %d = %f\n", wavelength + 380, reconstructedSpectrum[wavelength][0]);
+    }
 }
+
 #endif
