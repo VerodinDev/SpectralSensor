@@ -115,13 +115,23 @@ double Spectrum::CIE1931_xy_to_duv(double x, double y)
 
 void Spectrum::reconstructSpectrum(double spectralMatrix[][10], double countMatrix[][1], double reconstructedSpectrum[][1], const uint16_t wavelengths)
 {
-    //380 - 780nm, 1nm steps = 401
-    //double spectrum[401][1];    // todo dynamically allocate
-
     multiplyMatrices(spectralMatrix, countMatrix, reconstructedSpectrum, wavelengths, 10);
 
-    // normalised
-    //= O10 / MAX($O$10:$O$630)
+    // normalise
+    double highestValue(0);
+
+    for (uint16_t i = 0; i < wavelengths; i++)
+    {
+        if (reconstructedSpectrum[i][0] > highestValue)
+        {
+            highestValue = reconstructedSpectrum[i][0];
+        }
+    }
+
+    for (uint16_t i = 0; i < wavelengths; i++)
+    {
+        reconstructedSpectrum[i][0] /= highestValue;
+    }
 }
 
 // excel, photometric results

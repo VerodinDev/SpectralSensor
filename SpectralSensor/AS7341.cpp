@@ -502,13 +502,17 @@ void AS7341::normalise()
     for (uint8_t i = CHANNEL_F1; i <= CHANNEL_NIR; i++)
     {
         if (m_correctedCounts[i] > highestValue)
+        {
             highestValue = m_correctedCounts[i];
+        }
     }
 
     printf("max = %f\n", highestValue);
 
     for (uint8_t i = CHANNEL_F1; i <= CHANNEL_NIR; i++)
+    {
         m_correctedCounts[i] /= highestValue;
+    }
 }
 
 void AS7341::enableAutoGain(bool enable)

@@ -154,13 +154,12 @@ void SpectralSensor::verifySpectralReconstruction()
 {
     printf("\n*** verify spectral reconstruction ***\n");
 
-    //  {S380nm} = spectralCorrectionMatrix{cor 380nm F1 ... cor 380nm Fn} * {ch F1(t)}
-
     const uint16_t wavelengths = 1000 - 380;
 
     double reconstructedSpectrum[wavelengths][1];
     Spectrum::reconstructSpectrum(spectralCorrectionMatrix, tstCorrectedCounts, reconstructedSpectrum, wavelengths);
 
+    // dump 1st 20 values to screen
     for (uint16_t wavelength = 0; wavelength < 20; wavelength++)
     {
         printf("Wavelength %d = %f\n", wavelength + 380, reconstructedSpectrum[wavelength][0]);
