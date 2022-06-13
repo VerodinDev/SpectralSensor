@@ -1,10 +1,12 @@
 
 #include "AS7341.h"
-
 #include <algorithm>
 #include <array>
 #include <mcp2221_dll_um.h>
+#include <stdexcept>
 #include <windows.h> // Sleep()
+
+using namespace std;
 
 AS7341::AS7341(MCP2221 &i2cController)
     : m_i2c(i2cController), m_readingState(AS7341_WAITING_DONE), m_gainStatus(AS7341_GAIN_1X), m_isSaturated(false),
@@ -18,8 +20,7 @@ AS7341::~AS7341()
 {
 }
 
-// init
-bool AS7341::init()
+void AS7341::init()
 {
     uint8_t ids[3];
     m_i2c.readRegister(AS7341_AUXID, ids, 3);
@@ -29,22 +30,20 @@ bool AS7341::init()
     // make sure we're talking to the right chip
     if ((ids[2] & 0xFC) != (AS7341_CHIP_ID << 2))
     {
-        printf("Device ID mismatch. Wrong chip? ");
-        return false;
+        throw std::runtime_error("Device ID mismatch. Wrong chip?");
     }
 
     powerEnable(true);
-    return true;
 }
 
-// read spectral channels F1-8, Clear and NIR
-bool AS7341::readAllChannels(uint16_t *readings_buffer)
+// read spectral channels
+void AS7341::readAllChannels(uint16_t *readings_buffer)
 {
     printf("Reading all channels\n");
 
     // turn on auto gain
     // do this before taking actual readings or the result is incorrect (affects TINT?)
-    setAutoGain(true);
+    enableAutoGain(true);
 
     // read high channels (need F8 for auto gain)
     // just use same buffer, will be overwritten anyway
@@ -52,7 +51,7 @@ bool AS7341::readAllChannels(uint16_t *readings_buffer)
     enableSpectralMeasurement(true);
     delayForData(0);
 
-    m_i2c.readRegister(AS7341_CH0_DATA_L, (uint8_t*)&readings_buffer[6], 12);
+    m_i2c.readRegister(AS7341_CH0_DATA_L, (uint8_t *)&readings_buffer[6], 12);
 
     getAStatus();
 
@@ -61,7 +60,7 @@ bool AS7341::readAllChannels(uint16_t *readings_buffer)
         printf("Saturated\n");
     }
 
-    setAutoGain(false);
+    enableAutoGain(false);
 
     // now take actual readings
     enableSpectralMeasurement(true);
@@ -87,9 +86,6 @@ bool AS7341::readAllChannels(uint16_t *readings_buffer)
     m_rawValues[7] = m_channel_readings[AS7341_CHANNEL_F8];
     m_rawValues[8] = m_channel_readings[AS7341_CHANNEL_CLEAR];
     m_rawValues[9] = m_channel_readings[AS7341_CHANNEL_NIR];
-
-    // TODO get rid of boolean returns! exceptions?
-    return true;
 }
 
 // delay while waiting for data, with option to time out and recover
@@ -98,7 +94,7 @@ void AS7341::delayForData(uint16_t waitTime)
     if (waitTime == 0)
     {
         // wait forever
-        while (!getIsDataReady())
+        while (!isDataReady())
         {
             Sleep(1);
         }
@@ -109,7 +105,7 @@ void AS7341::delayForData(uint16_t waitTime)
     {
         uint32_t elapsedMillis = 0;
 
-        while (!getIsDataReady() && elapsedMillis < waitTime)
+        while (!isDataReady() && elapsedMillis < waitTime)
         {
             Sleep(1);
             elapsedMillis++;
@@ -119,9 +115,10 @@ void AS7341::delayForData(uint16_t waitTime)
 }
 
 // read channels F1-8, Clear and NIR
-bool AS7341::readAllChannels()
+// TODO pointless, remove
+void AS7341::readAllChannels()
 {
-    return readAllChannels(m_channel_readings);
+    readAllChannels(m_channel_readings);
 }
 
 void AS7341::setSMUXLowChannels(bool f1_f4)
@@ -152,17 +149,17 @@ void AS7341::powerEnable(bool enable_power)
 }
 
 // enable measurement of spectral data
-bool AS7341::enableSpectralMeasurement(bool enable_measurement)
+void AS7341::enableSpectralMeasurement(bool enable)
 {
     uint8_t enable_reg = m_i2c.readRegisterByte(AS7341_ENABLE);
-    enable_reg = m_i2c.modifyBitInByte(enable_reg, (uint8_t)enable_measurement, 1);
+    enable_reg = m_i2c.modifyBitInByte(enable_reg, (uint8_t)enable, 1);
 
-    return m_i2c.writeRegisterByte(AS7341_ENABLE, enable_reg);
+    m_i2c.writeRegisterByte(AS7341_ENABLE, enable_reg);
 }
 
-bool AS7341::enableSMUX(void)
+void AS7341::enableSMUX()
 {
-    bool success = m_i2c.modifyRegisterBit(AS7341_ENABLE, true, 4);
+    m_i2c.modifyRegisterBit(AS7341_ENABLE, true, 4);
 
     int timeOut = 1000; // arbitrary value, but if it takes 1000 milliseconds then something is wrong
     int count = 0;
@@ -174,64 +171,60 @@ bool AS7341::enableSMUX(void)
     }
 
     if (count >= timeOut)
-        return false;
-    else
-        return success;
+    {
+        throw runtime_error("Enable SMUX timeout");
+    }
 }
 
-bool AS7341::setSMUXCommand(as7341_smux_cmd command)
+void AS7341::setSMUXCommand(as7341_smux_cmd command)
 {
-    return m_i2c.modifyRegisterMultipleBit(AS7341_CFG6, command, 3, 2);
+    m_i2c.modifyRegisterMultipleBit(AS7341_CFG6, command, 3, 2);
 }
 
 // enable LED
-bool AS7341::enableLED(bool enable_led)
+void AS7341::enableLED(bool enable)
 {
-    printf("Set LED to %d\n", enable_led);
+    printf("Set LED to %d\n", enable);
 
     // access 0x60-0x74
     setBank(true);
 
-    bool result =
-        m_i2c.modifyRegisterBit(AS7341_CONFIG, enable_led, 3) && m_i2c.modifyRegisterBit(AS7341_LED, enable_led, 7);
+    m_i2c.modifyRegisterBit(AS7341_CONFIG, enable, 3);
+    m_i2c.modifyRegisterBit(AS7341_LED, enable, 7);
 
     // access registers 0x80 and above (default)
     setBank(false);
-
-    return result;
 }
 
 // set current limit for the LED
-bool AS7341::setLEDCurrent(uint16_t led_current_ma)
+void AS7341::setLEDCurrent(uint16_t current)
 {
     // check within permissible range
-    if (led_current_ma > 258)
+    if (current > 258)
     {
-        return false;
+        throw range_error("LED current too high");
     }
-    if (led_current_ma < 4)
+    if (current < 4)
     {
-        led_current_ma = 4;
+        current = 4;
     }
 
     // Access 0x60 0x74
     setBank(true);
 
-    bool result = m_i2c.modifyRegisterMultipleBit(AS7341_LED, (uint8_t)((led_current_ma - 4) / 2), 0, 7);
+    m_i2c.modifyRegisterMultipleBit(AS7341_LED, (uint8_t)((current - 4) / 2), 0, 7);
 
     // Access registers 0x80 and above (default)
     setBank(false);
-
-    return result;
 }
 
 // set active register bank
-bool AS7341::setBank(bool low)
+void AS7341::setBank(bool low)
 {
-    return m_i2c.modifyRegisterBit(AS7341_CFG0, low, 4);
+    m_i2c.modifyRegisterBit(AS7341_CFG0, low, 4);
 }
 
-bool AS7341::getIsDataReady()
+bool AS7341::isDataReady()
 {
     return m_i2c.checkRegisterBit(AS7341_STATUS2, 6);
 }
@@ -289,9 +282,9 @@ void AS7341::setup_F5F8_Clear_NIR()
 }
 
 // set ATIME
-bool AS7341::setATIME(uint8_t atime_value)
+void AS7341::setATIME(uint8_t atime_value)
 {
-    return m_i2c.writeRegisterByte(AS7341_ATIME, atime_value);
+    m_i2c.writeRegisterByte(AS7341_ATIME, atime_value);
 }
 
 // get ATIME
@@ -306,14 +299,13 @@ uint8_t AS7341::getATIME()
 }
 
 // set ASTEP
-bool AS7341::setASTEP(uint16_t astep_value)
+void AS7341::setASTEP(uint16_t astep_value)
 {
     // for some reason no matter what I do, ASTEP ends up wrong in the registers. Doing 2 seperate writes works fine.
     // return m_i2c.writeRegister(AS7341_ASTEP_L, (uint8_t *)&astep_value, 2);
 
     m_i2c.writeRegisterByte(AS7341_ASTEP_L, 0x57);
     m_i2c.writeRegisterByte(AS7341_ASTEP_H, 0x02);
-    return true;
 }
 
 // get ASTEP
@@ -331,9 +323,9 @@ uint16_t AS7341::getASTEP()
 }
 
 // set ADC gain multiplier
-bool AS7341::setGain(as7341_gain gain_value)
+void AS7341::setGain(as7341_gain gain_value)
 {
-    return m_i2c.writeRegisterByte(AS7341_CFG1, gain_value);
+    m_i2c.writeRegisterByte(AS7341_CFG1, gain_value);
 
     // AGAIN bitfield is only[0:4] but the rest is empty
 }
@@ -506,14 +498,12 @@ void AS7341::normalise()
         m_correctedCounts[i] /= highestValue;
 }
 
-void AS7341::setAutoGain(bool enable)
+void AS7341::enableAutoGain(bool enable)
 {
-    bool result(false);
-
     // enable spectral AGC (SP_AGC)
     uint8_t cfg8_reg = m_i2c.readRegisterByte(AS7341_CFG8);
     cfg8_reg = m_i2c.modifyBitInByte(cfg8_reg, (uint8_t)enable, 2);
-    result = m_i2c.writeRegisterByte(AS7341_CFG8, cfg8_reg);
+    m_i2c.writeRegisterByte(AS7341_CFG8, cfg8_reg);
 
     m_useAutoGain = enable;
 
@@ -526,8 +516,8 @@ void AS7341::setAutoGain(bool enable)
     uint8_t thresholdChannel = AS7341_ADC_CHANNEL_3;
 
     uint8_t cfg12_reg = m_i2c.readRegisterByte(AS7341_CFG12);
-    cfg12_reg = m_i2c.modifyRegisterMultipleBit(cfg12_reg, thresholdChannel, 0, 2);
-    result = m_i2c.writeRegisterByte(AS7341_CFG12, cfg12_reg);
+    m_i2c.modifyRegisterMultipleBit(cfg12_reg, thresholdChannel, 0, 2);
+    m_i2c.writeRegisterByte(AS7341_CFG12, cfg12_reg);
 
     // Sets the channel used for interrupts, persistence and
     //	the AGC, if enabled, to determine device statusand
@@ -540,9 +530,9 @@ void AS7341::setAutoGain(bool enable)
     // The threshold is automatically calculated internally as a percentage of full - scale.Note that full - scale is
     // equal to(ATIME + 1) x(ASTEP + 1).
     uint8_t cfg10_reg = m_i2c.readRegisterByte(AS7341_CFG10);
-    cfg10_reg = m_i2c.modifyRegisterMultipleBit(cfg10_reg, lowHysteresis, 4, 2);
-    cfg10_reg = m_i2c.modifyRegisterMultipleBit(cfg10_reg, highHysteresis, 6, 2);
-    result = m_i2c.writeRegisterByte(AS7341_CFG10, cfg10_reg);
+    m_i2c.modifyRegisterMultipleBit(cfg10_reg, lowHysteresis, 4, 2);
+    m_i2c.modifyRegisterMultipleBit(cfg10_reg, highHysteresis, 6, 2);
+    m_i2c.writeRegisterByte(AS7341_CFG10, cfg10_reg);
 
     // AS7341_AGC_GAIN_MAX
     //	3 : 0 AGC_AGAIN_MAX

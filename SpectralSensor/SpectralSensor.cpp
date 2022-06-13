@@ -1,11 +1,90 @@
 
+#include "SpectralSensor.h"
 #include "AS7341.h"
 #include "AS7341_values.h"
 #include "MCP2221.h"
 #include "Spectrum.h"
 #include <iostream>
 #include <mcp2221_dll_um.h>
+#include <stdexcept>
 
+void SpectralSensor::takeReading()
+{
+    // sensor.setLEDCurrent(15);
+    // sensor.enableLED(true);
+
+    m_pSensor->readAllChannels();
+
+    // sensor.enableLED(false);
+
+    m_pSensor->calculateBasicCounts();
+    m_pSensor->applyGainCorrection(tstGainCorrections);
+    m_pSensor->calculateDataSensorCorrection();
+
+    // apply corrections
+    double correctedCounts[10];
+    m_pSensor->getCorrectedCounts(correctedCounts);
+
+    // output channel raw and corrected counts
+    printf("\n");
+    for (uint8_t channel = CHANNEL_F1; channel < CHANNEL_F8; channel++)
+    {
+        printf("F%d %d\t %f \n", channel, m_pSensor->getRawValue(static_cast<SpectralChannel>(channel)),
+               m_pSensor->getCorrectedCount(static_cast<SpectralChannel>(channel)));
+    }
+    printf("\n");
+
+    // put in matrix
+    double countMatrix[CHANNEL_F8][1] = {0};
+    for (int i = 0; i < CHANNEL_F8; i++)
+    {
+        countMatrix[i][0] = correctedCounts[i];
+    }
+
+    // get XYZ
+    double X(0), Y(0), Z(0);
+    Spectrum::countsToXYZ(calibrationMatrix, countMatrix, X, Y, Z);
+    printf("X = %f, Y = %f, Z = %f\n", X, Y, Z);
+
+    double x(0), y(0);
+    double XYZsum = X + Y + Z;
+    x = X / XYZsum;
+    y = Y / XYZsum;
+
+    // CCT and duv
+    uint16_t cct = Spectrum::CIE1931_xy_to_CCT(x, y);
+    double duv = Spectrum::CIE1931_xy_to_duv(x, y);
+    printf("CCT = %dK, Duv = %f\n", cct, duv);
+    printf("******************\n");
+}
+
+SpectralSensor::SpectralSensor() : m_pI2cController(0), m_pSensor(0)
+{
+}
+
+void SpectralSensor::setupI2C()
+{
+    m_pI2cController = new MCP2221(AS7341_I2CADDR_DEFAULT);
+    m_pI2cController->connect();
+    m_pI2cController->printInfo();
+}
+
+void SpectralSensor::setupAS7341()
+{
+    m_pSensor = new AS7341(*m_pI2cController);
+    m_pSensor->init();
+
+    // get sensor data
+    // recommended: atime 29, astep 599 -> 50ms -> 0.083400???
+    // TINT 182 ->
+    m_pSensor->setATIME(29);  // recommended 29
+    m_pSensor->setASTEP(599); // 2,87 us steps, default 999 (2,78 ms), recommended 599
+    m_pSensor->setGain(AS7341_GAIN_32X);
+    // m_sensor->setAutoGain(true);
+}
+
+#ifdef VERIFY_CALCS
+// not updated after creation of SpectralSensor class
 void checkChannelDataCalcs()
 {
     uint16_t raw = 1236;
@@ -76,91 +155,4 @@ void spectralReconstruction()
     // double resultMatrix[400][10];
     //  {S380nm} = spectralCorrectionMatrix{cor 380nm F1 ... cor 380nm Fn} * {ch F1(t)}
 }
-
-void takeReading(AS7341 &sensor)
-{
-    // sensor.setLEDCurrent(15);
-    // sensor.enableLED(true);
-
-    sensor.readAllChannels();
-
-    // sensor.enableLED(false);
-
-    sensor.calculateBasicCounts();
-    sensor.applyGainCorrection(tstGainCorrections);
-    sensor.calculateDataSensorCorrection();
-
-    // apply corrections
-    double correctedCounts[10];
-    sensor.getCorrectedCounts(correctedCounts);
-
-    // output channel raw and corrected counts
-    printf("\n");
-    for (uint8_t channel = CHANNEL_F1; channel < CHANNEL_F8; channel++)
-    {
-        printf("F%d %d\t %f \n", channel, sensor.getRawValue(static_cast<SpectralChannel>(channel)),
-               sensor.getCorrectedCount(static_cast<SpectralChannel>(channel)));
-    }
-    printf("\n");
-
-    // put in matrix
-    double countMatrix[CHANNEL_F8][1] = {0};
-    for (int i = 0; i < CHANNEL_F8; i++)
-    {
-        countMatrix[i][0] = correctedCounts[i];
-    }
-
-    // get XYZ
-    double X(0), Y(0), Z(0);
-    Spectrum::countsToXYZ(calibrationMatrix, countMatrix, X, Y, Z);
-    printf("X = %f, Y = %f, Z = %f\n", X, Y, Z);
-
-    double x(0), y(0);
-    double XYZsum = X + Y + Z;
-    x = X / XYZsum;
-    y = Y / XYZsum;
-
-    // CCT and duv
-    uint16_t cct = Spectrum::CIE1931_xy_to_CCT(x, y);
-    double duv = Spectrum::CIE1931_xy_to_duv(x, y);
-    printf("CCT = %dK, Duv = %f\n", cct, duv);
-    printf("******************\n");
-}
-
-int main()
-{
-    printf("*** Spectral sensor v0.1 ***\n");
-
-    //*********DEBUG***********
-    // checkChannelDataCalcs();
-    // checkCIE1931Calcs();
-    //
-    // exit(-50);
-    //********************
-
-    MCP2221 i2cController(AS7341_I2CADDR_DEFAULT);
-    i2cController.connect();
-    i2cController.printInfo();
-
-    AS7341 sensor(i2cController);
-    if (!sensor.init())
-    {
-        exit(6);
-    }
-
-    // get sensor data
-    // recommended: atime 29, astep 599 -> 50ms -> 0.083400???
-    // TINT 182 ->
-    sensor.setATIME(29);  // recommended 29
-    sensor.setASTEP(599); // 2,87 us steps, default 999 (2,78 ms), recommended 599
-    // uint16_t astep = sensor.getASTEP();
-    // exit(100);
-    sensor.setGain(AS7341_GAIN_32X);
-    //sensor.setAutoGain(true);
-
-    // take n readings
-    for (uint8_t readings = 0; readings < 10; readings++)
-    {
-        takeReading(sensor);
-    }
-}
+#endif

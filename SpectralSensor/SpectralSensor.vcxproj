@@ -135,6 +135,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="AS7341.cpp" />
+    <ClCompile Include="main.cpp" />
     <ClCompile Include="MCP2221.cpp" />
     <ClCompile Include="SpectralSensor.cpp" />
     <ClCompile Include="Spectrum.cpp" />
@@ -144,6 +145,7 @@
     <ClInclude Include="AS7341_I2C_registers.h" />
     <ClInclude Include="AS7341_values.h" />
     <ClInclude Include="MCP2221.h" />
+    <ClInclude Include="SpectralSensor.h" />
     <ClInclude Include="Spectrum.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
