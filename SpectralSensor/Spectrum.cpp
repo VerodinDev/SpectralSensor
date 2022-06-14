@@ -49,24 +49,6 @@ void Spectrum::spectrumToXYZ(double cie1931[][3], double spectralData[], double 
     Z *= 1 / Ysum;
 }
 
-// void Spectrum::spectrumToXYZ()
-//{
-//	//for (i = 0, lambda = 380; lambda < 780.1; i++, lambda++)
-//	//{
-//	//	double Me;
-//
-//	//	Me = (*spec_intens)(lambda);
-//	//	X += Me * cie1931[i][0];
-//	//	Y += Me * cie1931[i][1];
-//	//	Z += Me * cie1931[i][2];
-//	//}
-//
-//	//XYZsum = X + Y + Z;
-//	//*x = X / XYZsum;
-//	//*y = Y / XYZsum;
-//	//*z = Z / XYZsum;
-// }
-
 void Spectrum::XYZtoXy(const double X, const double Y, const double Z, double& x, double& y)
 {   
     double XYZsum = X + Y + Z;
