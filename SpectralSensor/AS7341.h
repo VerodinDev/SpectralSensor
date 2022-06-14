@@ -4,7 +4,7 @@
 #include "MCP2221.h"
 #include <stdint.h>
 
-// enable calc veridifcation against example values in AMS excel
+// enable calc verification against example values in AMS excel
 //#define VERIFY_CALCS_AS7341
 
 enum SpectralChannel

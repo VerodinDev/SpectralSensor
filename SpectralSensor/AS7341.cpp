@@ -320,10 +320,10 @@ uint8_t AS7341::getATIME()
 void AS7341::setASTEP(uint16_t astep_value)
 {
     // for some reason no matter what I do, ASTEP ends up wrong in the registers. Doing 2 seperate writes works fine.
-    // return m_i2c.writeRegister(AS7341_ASTEP_L, (uint8_t *)&astep_value, 2);
+    //m_i2c.writeRegister(AS7341_ASTEP_L, (uint8_t *)&astep_value, 2);
 
-    m_i2c.writeRegisterByte(AS7341_ASTEP_L, 0x57);
-    m_i2c.writeRegisterByte(AS7341_ASTEP_H, 0x02);
+    m_i2c.writeRegisterByte(AS7341_ASTEP_L, astep_value & 0x00FF);
+    m_i2c.writeRegisterByte(AS7341_ASTEP_H, (astep_value >> 8) & 0xFF);
 }
 
 // get ASTEP

@@ -4,7 +4,7 @@
 
 int main()
 {
-    printf("*** Spectral sensor v0.1 ***\n");
+    printf("*** Spectral sensor v0.1 ***\n\n");
 
 #ifdef VERIFY_CALCS
 

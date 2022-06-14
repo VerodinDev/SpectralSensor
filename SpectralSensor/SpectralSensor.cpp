@@ -8,6 +8,9 @@
 #include <mcp2221_dll_um.h>
 #include <stdexcept>
 
+// uncomment to use XYZ calibration matrix. Otherwise spectral calibration matrix is used
+//#define USE_XYZ_CALIBRATION_MATRIX
+
 SpectralSensor::SpectralSensor() : m_pI2cController(0), m_pSensor(0)
 {
 }
@@ -31,6 +34,13 @@ void SpectralSensor::setupAS7341()
     m_pSensor->setASTEP(599); // 2,87 us steps, default 999 (2,78 ms), recommended 599
     m_pSensor->setGain(AS7341_GAIN_32X);
     // m_sensor->setAutoGain(true);
+
+    printf("Init done\n");
+#ifdef USE_XYZ_CALIBRATION_MATRIX
+    printf("Using XYZ calibration matrix\n\n");
+#else
+    printf("Using spectral calibration matrix\n\n");
+#endif
 }
 
 void SpectralSensor::takeReading()
@@ -66,12 +76,25 @@ void SpectralSensor::takeReading()
     for (int i = 0; i < 10; i++)
     {
         countMatrix[i][0] = correctedCounts[i];
-        //printf("i=%d\n", i); OK
+        // printf("i=%d\n", i); OK
     }
 
     // get XYZ
     double X(0), Y(0), Z(0);
+
+#ifdef USE_XYZ_CALIBRATION_MATRIX
+
     Spectrum::countsToXYZ(calibrationMatrix, countMatrix, X, Y, Z);
+
+#else // use spectral calibration matrix
+
+    // reconstruct spectrum and get XYZ values
+    double reconstructedSpectrum[allWavelengths][1];
+    Spectrum::reconstructSpectrum(spectralCorrectionMatrix, countMatrix, reconstructedSpectrum, allWavelengths);
+    Spectrum::spectrumToXYZ_AMS(reconstructedSpectrum, X, Y, Z, visibleWavelengths);
+
+#endif
+
     printf("X = %f, Y = %f, Z = %f\n", X, Y, Z);
 
     // get xy
@@ -172,8 +195,10 @@ void SpectralSensor::verifySpectralReconstruction()
     double Z(0);
 
     Spectrum::spectrumToXYZ_AMS(reconstructedSpectrum, X, Y, Z, visibleWavelengths);
-
     printf("X = %f, Y = %f, Z = %f\n", X, Y, Z);
+
+    //
+    Spectrum::saveToCsv(reconstructedSpectrum, "reconstructedSpectrum.csv");
 
     // get xy
     double x(0), y(0);
