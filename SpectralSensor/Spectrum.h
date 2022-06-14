@@ -1,6 +1,10 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
+
+const uint16_t allWavelengths = 1000 - 380;
+const uint16_t visibleWavelengths = 780 - 380;
 
 class Spectrum
 {
@@ -11,7 +15,7 @@ class Spectrum
     static void spectrumToXYZ_AMS(double spectralData[][1], double& X, double& Y, double& Z, const uint16_t wavelengths);
 
     // spectrum to XYZ
-    static void spectrumToXYZ(double cie1931[][3], double spectralData[], double &X, double &Y, double &Z);
+    //static void spectrumToXYZ(double cie1931[][3], double spectralData[], double &X, double &Y, double &Z);
 
     // XYZ to xy
     static void XYZtoXy(const double X, const double Y, const double Z, double& x, double& y);
@@ -27,7 +31,7 @@ class Spectrum
     // spectral reconstruction based on channel data
     static void reconstructSpectrum(double spectralMatrix[][10], double countMatrix[][1], double reconstructedSpectrum[][1], const uint16_t wavelengths = 780 - 380);
 
-    // private:
+    static void saveToCsv(double spectralData[][1], std::string filename);
 
     static void multiplyMatrices(double matrixA[][10], double matrixB[][1], double product[][1], const uint16_t rows, const uint8_t columns);
 };

@@ -3,6 +3,7 @@
 #include "AS7341_values.h"  // sensor specific calibration matrix
 #include <cmath>
 #include "AS7341.h"
+#include <fstream>
 
 void Spectrum::countsToXYZ(double correctionMatrix[][10], double countMatrix[][1], double &X, double &Y, double &Z)
 {
@@ -32,22 +33,22 @@ void Spectrum::spectrumToXYZ_AMS(double spectralData[][1], double& X, double& Y,
 // https://www.waveformlighting.com/tech/calculate-color-temperature-cct-from-cie-1931-xy-coordinates/
 // CCT = 1872K
 // Duv = -0.0173
-void Spectrum::spectrumToXYZ(double cie1931[][3], double spectralData[], double &X, double &Y, double &Z)
-{
-    double Ysum(0);
-
-    for (int i = 0; i < 401; i++)
-    {
-        X += cie1931[i][0] * spectralData[i];
-        Y += cie1931[i][1] * spectralData[i];
-        Z += cie1931[i][2] * spectralData[i];
-        Ysum += cie1931[i][1];
-    }
-
-    X *= 1 / Ysum;
-    Y *= 1 / Ysum;
-    Z *= 1 / Ysum;
-}
+//void Spectrum::spectrumToXYZ(double cie1931[][3], double spectralData[], double &X, double &Y, double &Z)
+//{
+//    double Ysum(0);
+//
+//    for (int i = 0; i < 401; i++)
+//    {
+//        X += cie1931[i][0] * spectralData[i];
+//        Y += cie1931[i][1] * spectralData[i];
+//        Z += cie1931[i][2] * spectralData[i];
+//        Ysum += cie1931[i][1];
+//    }
+//
+//    X *= 1 / Ysum;
+//    Y *= 1 / Ysum;
+//    Z *= 1 / Ysum;
+//}
 
 void Spectrum::XYZtoXy(const double X, const double Y, const double Z, double& x, double& y)
 {   
@@ -125,6 +126,22 @@ void Spectrum::reconstructSpectrum(double spectralMatrix[][10], double countMatr
     //{
     //    reconstructedSpectrum[i][0] /= highestValue;
     //}
+}
+
+void Spectrum::saveToCsv(double spectralData[][1], std::string filename)
+{
+    uint16_t wavelengths = 780 - 380;
+
+    std::ofstream cvsFile;
+    
+    cvsFile.open(filename);
+
+    for (uint16_t wavelength = 0; wavelength <= wavelengths; wavelength++)
+    {
+        cvsFile << wavelength + 380 << ";" << spectralData[wavelength][0] << /*"; " << */std::endl;
+    }
+
+    cvsFile.close();
 }
 
 // excel, photometric results
