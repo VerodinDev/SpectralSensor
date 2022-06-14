@@ -1,6 +1,6 @@
 #include "MCP2221.h"
 
-#include <cstdio>   // printf
+#include <cstdio>
 #include <iostream> // wcout
 #include <mcp2221_dll_um.h>
 #include <stdexcept>
@@ -17,7 +17,7 @@ MCP2221::MCP2221(uint8_t i2c_address) : m_i2c_address(i2c_address), m_i2c_dev(0)
 
 MCP2221::~MCP2221()
 {
-    // Mcp2221_Close(m_i2c_dev);
+    Mcp2221_Close(m_i2c_dev);
 }
 
 void MCP2221::connect()
