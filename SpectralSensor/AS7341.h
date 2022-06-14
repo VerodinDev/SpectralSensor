@@ -21,10 +21,9 @@ enum SpectralChannel
     CHANNEL_NIR
 };
 
-// TODO
 struct ChannelValues
 {
-    as7341_color_channel channel;
+    SpectralChannel channel;
     uint16_t raw;
     double basicCount;
     double correctedCount;
@@ -88,21 +87,18 @@ class AS7341
     void normalise();
     uint8_t getAStatus();
 
-    MCP2221 m_i2c;
+    MCP2221& m_i2c;
     as7341_waiting m_readingState;
     as7341_gain m_gainStatus;
     bool m_isSaturated;
     bool m_useAutoGain;
 
-    // The value of the last reading of the spectral interrupt source register
+    // last reading of the spectral interrupt source register
     uint8_t m_last_spectral_int_source;
 
+    // holds all sensor readings, including duplicates (as7341_color_channel)
     uint16_t m_channel_readings[12];
-    uint16_t m_rawValues[10];
-    double m_basicCounts[10];
-    double m_correctedCounts[10];
-    double m_normalisedValues[10];
 
-    uint8_t getOptimizedMeasurementValues(bool checkState, bool optimizedValuesDetected, uint16_t rawVal[],
-                                          double basicVal[], double corrVal[]);
+    // holds all unique channels (SpectralChannel)
+    ChannelValues m_readings[10];
 };

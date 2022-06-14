@@ -1,20 +1,26 @@
 
 #include "AS7341.h"
+#include "AS7341_values.h"
 #include <algorithm>
 #include <array>
 #include <mcp2221_dll_um.h>
 #include <stdexcept>
 #include <windows.h> // Sleep()
-#include "AS7341_values.h"
 
 using namespace std;
 
 AS7341::AS7341(MCP2221 &i2cController)
     : m_i2c(i2cController), m_readingState(AS7341_WAITING_DONE), m_gainStatus(AS7341_GAIN_1X), m_isSaturated(false),
-      m_useAutoGain(false),
-      m_last_spectral_int_source(0), m_basicCounts{0}, m_channel_readings{0}, m_correctedCounts{0}, m_normalisedValues{
-                                                                                                        0}
+      m_useAutoGain(false), m_last_spectral_int_source(0), m_channel_readings{0}
 {
+    for (uint8_t channel = 0; channel < 10; channel++)
+    {
+        m_readings[channel].channel = static_cast<SpectralChannel>(channel);
+        m_readings[channel].raw = 0;
+        m_readings[channel].basicCount = 0;
+        m_readings[channel].correctedCount = 0;
+        m_readings[channel].normalisedCount = 0;
+    }
 }
 
 AS7341::~AS7341()
@@ -80,22 +86,22 @@ void AS7341::readAllChannels(uint16_t *readings_buffer)
 
     for (uint8_t channel = 0; channel < 10; channel++)
     {
-        m_rawValues[channel] = tstRawCounts[channel];
+        m_readings[channel].raw = tstRawCounts[channel];
     }
-    
+
 #else
 
     // strip out CLEAR and NIR channels in the middle
-    m_rawValues[CHANNEL_F1] = m_channel_readings[AS7341_CHANNEL_F1];
-    m_rawValues[CHANNEL_F2] = m_channel_readings[AS7341_CHANNEL_F2];
-    m_rawValues[CHANNEL_F3] = m_channel_readings[AS7341_CHANNEL_F3];
-    m_rawValues[CHANNEL_F4] = m_channel_readings[AS7341_CHANNEL_F4];
-    m_rawValues[CHANNEL_F5] = m_channel_readings[AS7341_CHANNEL_F5];
-    m_rawValues[CHANNEL_F6] = m_channel_readings[AS7341_CHANNEL_F6];
-    m_rawValues[CHANNEL_F7] = m_channel_readings[AS7341_CHANNEL_F7];
-    m_rawValues[CHANNEL_F8] = m_channel_readings[AS7341_CHANNEL_F8];
-    m_rawValues[CHANNEL_CLEAR] = m_channel_readings[AS7341_CHANNEL_CLEAR];
-    m_rawValues[CHANNEL_NIR] = m_channel_readings[AS7341_CHANNEL_NIR];
+    m_readings[CHANNEL_F1].raw = m_channel_readings[AS7341_CHANNEL_F1];
+    m_readings[CHANNEL_F2].raw = m_channel_readings[AS7341_CHANNEL_F2];
+    m_readings[CHANNEL_F3].raw = m_channel_readings[AS7341_CHANNEL_F3];
+    m_readings[CHANNEL_F4].raw = m_channel_readings[AS7341_CHANNEL_F4];
+    m_readings[CHANNEL_F5].raw = m_channel_readings[AS7341_CHANNEL_F5];
+    m_readings[CHANNEL_F6].raw = m_channel_readings[AS7341_CHANNEL_F6];
+    m_readings[CHANNEL_F7].raw = m_channel_readings[AS7341_CHANNEL_F7];
+    m_readings[CHANNEL_F8].raw = m_channel_readings[AS7341_CHANNEL_F8];
+    m_readings[CHANNEL_CLEAR].raw = m_channel_readings[AS7341_CHANNEL_CLEAR];
+    m_readings[CHANNEL_NIR].raw = m_channel_readings[AS7341_CHANNEL_NIR];
 
 #endif
 }
@@ -436,25 +442,28 @@ uint16_t AS7341::getChannel(as7341_color_channel channel) const
 
 uint16_t AS7341::getRawValue(SpectralChannel channel) const
 {
-    return m_rawValues[channel];
+    return m_readings[channel].raw;
 }
 
 // The higher the counts (before saturation), the better the accuracy. Changing gain or TINT will affect
 // counts.Both parameters will have different effects like FSR, noise, linearities, time, and others.
 double AS7341::getBasicCount(SpectralChannel channel) const
 {
-    return m_basicCounts[channel];
+    return m_readings[channel].basicCount;
 }
 
 double AS7341::getCorrectedCount(SpectralChannel channel) const
 {
-    return m_correctedCounts[channel];
+    return m_readings[channel].correctedCount;
 }
 
 void AS7341::getCorrectedCounts(double counts[]) const
 {
     for (uint8_t i = CHANNEL_F1; i <= CHANNEL_NIR; i++)
-        counts[i] = m_correctedCounts[i];
+    {
+        counts[i] = m_readings[i].correctedCount;
+    }
+
     // std::array<double, 10> counts = m_correctedCounts;
     // return &m_correctedCounts[0];
 }
@@ -463,7 +472,7 @@ void AS7341::calculateBasicCounts()
 {
     for (uint8_t channel = CHANNEL_F1; channel <= CHANNEL_NIR; channel++)
     {
-        m_basicCounts[channel] = toBasicCounts(m_rawValues[channel]);
+        m_readings[channel].basicCount = toBasicCounts(m_readings[channel].raw);
     }
 }
 
@@ -473,8 +482,8 @@ void AS7341::applyGainCorrection(double corrections[])
 
     for (uint8_t channel = CHANNEL_F1; channel <= CHANNEL_NIR; channel++)
     {
-        m_basicCounts[channel] *= corrections[gain];
-        //printf("channel %d\n", channel);
+        m_readings[channel].basicCount *= corrections[gain];
+        // printf("channel %d\n", channel);
     }
 }
 
@@ -488,7 +497,7 @@ void AS7341::calculateDataSensorCorrection()
         // m_correctedCounts[channel] = correctionFactors[channel] * (m_basicCounts[channel] -
         // offsetCompensationValues[channel]);
         // ALS Corrected_Counts = Basic_Counts ∗ Gain_Correction ∗ Correction_Factor - Offset
-        m_correctedCounts[channel] = m_basicCounts[channel];
+        m_readings[channel].correctedCount = m_readings[channel].basicCount;
     }
 
     normalise();
@@ -501,17 +510,17 @@ void AS7341::normalise()
     // std::max not compiling
     for (uint8_t i = CHANNEL_F1; i <= CHANNEL_NIR; i++)
     {
-        if (m_correctedCounts[i] > highestValue)
+        if (m_readings[i].correctedCount > highestValue)
         {
-            highestValue = m_correctedCounts[i];
+            highestValue = m_readings[i].correctedCount;
         }
     }
 
-    printf("max = %f\n", highestValue);
+    // printf("max = %f\n", highestValue);
 
     for (uint8_t i = CHANNEL_F1; i <= CHANNEL_NIR; i++)
     {
-        m_correctedCounts[i] /= highestValue;
+        m_readings[i].correctedCount /= highestValue;
     }
 }
 
@@ -577,148 +586,4 @@ uint8_t AS7341::getAStatus()
     printf("saturation = %d, gain status = %d\n", m_isSaturated, m_gainStatus);
 
     return true;
-}
-
-// AN000651 - AS7341 Auto Gain & Optimization
-// Auto Gain& optimization will automatically find the best(maximum possible) parameter options for the
-// gainand get the maximum optimized raw value in a defined range.Optimization analyzes sensor output
-// and the gain parameter setup to find an optimal ADC value based on various calculations of the gain.
-//
-// The steps in Auto Gain optimization is divided into two sections.One part contains the Auto Gain, and
-// the second part optimizes the derived Auto Gain.In the Auto Gain section, a gain between the maximum
-// and minimum range is automatically calculated by the results of the test measurement.Therefore, the
-// sensor’s raw value is placed as close to the maximum as possible, without saturation.
-uint8_t AS7341::getOptimizedMeasurementValues(bool checkState, bool optimizedValuesDetected, uint16_t rawVal[],
-                                              double basicVal[], double corrVal[])
-{
-    //	uint8_t currentGain, maxGain;
-    //	int errorcode;
-    //	int measureCount;
-    //
-    //	RawValueStates rawValueState = RawValueStates.Saturation;
-    //
-    //	// start with middle gain value
-    //	// middle Gain value is calculated from the maximum possible gain for optimizationand taken as the currentGain.
-    //	currentGain = (uint8_t)(cobMaxGain.Items.Count / 2.0 + 0.5);
-    //
-    //	if (currentGain > maxGain)
-    //	{
-    //		currentGain = maxGain;
-    //	}
-    //
-    //	uint8_t newGain;
-    //	uint8_t saturationGain = (uint8_t)(cobMaxGain.Items.Count + 1);
-    //
-    //	// Inside the while loop, the gain of the device is set to currentGain.Then, reads out the raw
-    //	// measurementand checks the saturation or noise state of rawValue measurements.If any of the
-    //	// conditions are true, it will enter the corresponding loop.
-    //	// If the raw value is above the maximum range of the raw values(RawValueStates.Saturation) gain
-    //	// correction is made by reducing the gain by half of the currentGain using the algorithm below.
-    //	while (true)
-    //	{
-    //		// set gain value
-    //		errorcode = setGain(currentGain);
-    //		if (errorcode != OK)
-    //		{
-    //			//throw new Exception("Error from setGain: " + ((As7341Errorcodes)errorcode).ToString());
-    //		}
-    //
-    //		// measure and check raw vlues
-    //		rawValueState = CheckRawValues(ref checkState, ref rawVal, ref basicVal, ref corrVal);
-    //		measureCount++;
-    //
-    //		if (rawValueState == RawValueStates.Saturation)
-    //		{
-    //			//BaseFunctions.DebugOut(true, "Saturation gain: " + currentGain.ToString());
-    //			// in case of saturation have the gain value
-    //			if (currentGain == 0)
-    //			{
-    //				break;
-    //			}
-    //
-    //			// current gain less than saturation gain, then setting saturationGain equals currentGain
-    //			if (currentGain < saturationGain)
-    //			{
-    //				saturationGain = currentGain
-    //			}
-    //
-    //			// set new gain value
-    //			currentGain >>= 1;
-    //		}
-    //
-    //		//Otherwise, if the raw value is below the minimum range of raw values(RawValueStates.Noise),
-    //		//	the gain correction is made by increasing the gain when it is in noise state is shown in the
-    //		//	algorithm below.
-    //		else if (rawValueState == RawValueStates.Noise)
-    //		{
-    //			//BaseFunctions.DebugOut(true, "Noise gain: " + currentGain.ToString() + " Raw: " +
-    // rawVal.Max().ToString());
-    //			// in case of low gain value use the middle between max and current gain
-    //			if (currentGain == maxGain)
-    //			{
-    //				break;
-    //			}
-    //
-    //			newGain = (byte)((maxGain + currentGain) / 2.0 + 0.5);
-    //
-    //			if (newGain == currentGain)
-    //			{
-    //				newGain++;
-    //			}
-    //
-    //			// check if new gain value is greater than saturationGain flag
-    //			if (newGain >= saturationGain)
-    //			{
-    //				break;
-    //			}
-    //			currentGain = newGain;
-    //		}
-    //		else
-    //		{
-    //			//BaseFunctions.DebugOut(true, "Ok gain: " + currentGain.ToString() + " Raw: " +
-    // rawVal.Max().ToString()); 			break;
-    //		}
-    //	}
-    //
-    //	// check for saturation
-    //	if (rawValueState == RawValueStates.Saturation)
-    //	{
-    //		//lblOptimizationError.ForeColor = Color.Red;
-    //		//lblOptimizationError.Text = "Optimization not possible due to saturation";
-    //		return errorcode;
-    //	}
-    //
-    //	// set values for optimization
-    //	uint16_t currentRawVal = rawVal.Max();
-    //	double maxRawVal = _sensor.MaxCounts * _maximumAdcRange;
-    //	double minRawVal = _sensor.MaxCounts * _minimumAdcRange;
-    //
-    //	// optimize gain
-    //	// Log(Double, Double) Returns the logarithm of a specified number in a specified base.
-    //	int diffGain = (int)floor(log(maxRawVal / currentRawVal, 2));
-    //	if (currentGain + diffGain > maxGain)
-    //	{
-    //		diffGain = maxGain - currentGain;
-    //	}
-    //
-    //	currentRawVal = (uint16_t)(diffGain >= 0 ? currentRawVal << diffGain : currentRawVal >> -diffGain);
-    //	currentGain = (uint8_t)((int)currentGain + diffGain);
-    //
-    //	// set gain value
-    //	errorcode = setGain(currentGain);
-    //	if (errorcode != OK)
-    //	{
-    //		//throw new Exception("Error from setGain: " + As7341Errorcodes)errorcode).ToString());
-    //	}
-    //	// show current values
-    //	cobAgain.SelectedIndex = currentGain;
-    //	lblResultAgain.Text = _sensor.calculateGain(currentGain) + "x";
-    //
-    //	// measurement with optimized values
-    //	errorcode = getMeasurementValues(checkState, rawVal, basicVal, corrVal);
-    //	//lblOptimizationMessage.ForeColor = Color.Black;
-    //	//lblOptimizationMessage.Text = "Optimization measurements: " + ++measureCount;
-    //	return errorcode;
-
-    return 0;
 }
