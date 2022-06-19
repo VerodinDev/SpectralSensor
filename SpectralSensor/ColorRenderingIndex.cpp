@@ -117,11 +117,10 @@ void ColorRenderingIndex::calculateCRI(vector<double> &spd, uint8_t Ri[])
 
         // find corresponding color (uc,i, vc,i)
         // von Kries chromatic transform
-        vku[s] =
-            (10.872 + 0.404 * (m_reference.c / m_spd.c) * ctestTCS[s] - 4 * (m_reference.d / m_spd.d) * dtestTCS[s]) /
-            (16.518 + 1.481 * (m_reference.c / m_spd.c) * ctestTCS[s] - (m_reference.d / m_spd.d) * dtestTCS[s]);
-        vkv[s] =
-            5.52 / (16.518 + 1.481 * (m_reference.c / m_spd.c) * ctestTCS[s] - (m_reference.d / m_spd.d) * dtestTCS[s]);
+        double cn = (m_reference.c / m_spd.c) * ctestTCS[s];
+        double dn = (m_reference.d / m_spd.d) * dtestTCS[s];
+        vku[s] = (10.872 + 0.404 * cn - 4 * dn) / (16.518 + 1.481 * cn - dn);
+        vkv[s] = 5.52 / (16.518 + 1.481 * cn - dn);
 
         // CIE 1964 (U*, V*, W*) color space
         Wref[s] = 25 * pow(m_reference.TCSXYZ[s].Y, 1 / 3) - 17;
@@ -302,33 +301,6 @@ void ColorRenderingIndex::prepareReference(uint16_t CCT)
 
     convertToCIE1960(m_reference.XYZ, m_reference.u, m_reference.v);
     chromaticTransform(m_reference.u, m_reference.v, m_reference.c, m_reference.d);
-
-    //// u and v coordinates for each TCS in 1960
-    // double urefTCS[MAX_TCS];
-    // double vrefTCS[MAX_TCS];
-
-    //// c and d constants for TCS samples for use in Von Kries
-    // double crefTCS[MAX_TCS];
-    // double drefTCS[MAX_TCS];
-
-    // double Wref[MAX_TCS];
-    // double Uref[MAX_TCS];
-    // double Vref[MAX_TCS];
-
-    //// for each TCS
-    // for (uint8_t s = 0; s < MAX_TCS; s++)
-    //{
-    //     // convert chromaticities to the CIE 1960
-    //     convertToCIE1960(refTCSXYZ[s], urefTCS[s], vrefTCS[s]);
-
-    //    // von Kries chromatic transform
-    //    chromaticTransform(urefTCS[s], vrefTCS[s], crefTCS[s], drefTCS[s]);
-    //
-    //    // CIE 1964 (U*, V*, W*) color space
-    //    Wref[s] = 25 * pow(refTCSXYZ[s].Y, 1 / 3) - 17;
-    //    Uref[s] = 13 * Wref[s] * (urefTCS[s] - uref);
-    //    Vref[s] = 13 * Wref[s] * (vrefTCS[s] - vref);
-    //}
 }
 
 bool ColorRenderingIndex::verifyChromaticityDistance()
