@@ -351,7 +351,15 @@ void AS7341::setGain(as7341_gain gain_value)
 // get ADC gain multiplier
 as7341_gain AS7341::getGain()
 {
+#ifdef VERIFY_CALCS_AS7341
+
+    return AS7341_GAIN_4X;
+
+#else
+
     return m_useAutoGain ? m_gainStatus : static_cast<as7341_gain>(m_i2c.readRegisterByte(AS7341_CFG1));
+
+#endif
 
     // return static_cast<as7341_gain>(m_i2c.readRegisterByte(AS7341_CFG1));
 
@@ -372,6 +380,8 @@ double AS7341::getTINT()
     // default values 999 and 0 -> 50 ms
 
     // 30 * 600 * 2.78 = 50040
+    // TODO fix warnings
+    // C26451	Arithmetic overflow : Using operator '*' on a 4 byte value and then casting the result to a 8 byte value.Cast the value to the wider type before calling operator '*' to avoid overflow(io.2).
     double tint = (atime + 1) * (astep + 1) * 2.78 / 1000;
     // printf("TINT = %f (atime= %d, astep=%d)\n", tint, atime, astep);
     return tint;
@@ -493,11 +503,7 @@ void AS7341::calculateDataSensorCorrection()
 {
     for (uint8_t channel = CHANNEL_F1; channel <= CHANNEL_NIR; channel++)
     {
-        // TODO
-        // m_correctedCounts[channel] = correctionFactors[channel] * (m_basicCounts[channel] -
-        // offsetCompensationValues[channel]);
-        // ALS Corrected_Counts = Basic_Counts ∗ Gain_Correction ∗ Correction_Factor - Offset
-        m_readings[channel].correctedCount = m_readings[channel].basicCount;
+        m_readings[channel].correctedCount = correctionFactors_v3[channel] * (m_readings[channel].basicCount - offsetCompensationValues_v3[channel]);
     }
 
     normalise();

@@ -53,7 +53,7 @@ void SpectralSensor::takeReading()
     // sensor.enableLED(false);
 
     m_pSensor->calculateBasicCounts();
-    m_pSensor->applyGainCorrection(tstGainCorrections);
+    m_pSensor->applyGainCorrection(tstGainCorrections_v3);
     m_pSensor->calculateDataSensorCorrection();
 
     // apply corrections
@@ -80,32 +80,32 @@ void SpectralSensor::takeReading()
     }
 
     // get XYZ
-    double X(0), Y(0), Z(0);
+    Tristimulus XYZ;
 
 #ifdef USE_XYZ_CALIBRATION_MATRIX
 
-    Spectrum::countsToXYZ(calibrationMatrix, countMatrix, X, Y, Z);
+    Spectrum::countsToXYZ(calibrationMatrix_v3, countMatrix, X, Y, Z);
 
 #else // use spectral calibration matrix
 
     // reconstruct spectrum and get XYZ values
-    double reconstructedSpectrum[allWavelengths][1];
-    Spectrum::reconstructSpectrum(spectralCorrectionMatrix, countMatrix, reconstructedSpectrum, allWavelengths);
-    Spectrum::spectrumToXYZ_AMS(reconstructedSpectrum, X, Y, Z, visibleWavelengths);
+    double reconstructedSpectrum[ALL_WAVELENGTHS][1];
+    Spectrum::reconstructSpectrum(spectralCorrectionMatrix_v3, countMatrix, reconstructedSpectrum, ALL_WAVELENGTHS);
+    Spectrum::spectrumToXYZ_AMS(reconstructedSpectrum, XYZ, VISIBLE_WAVELENGTHS);
 
 #endif
 
-    printf("X = %f, Y = %f, Z = %f\n", X, Y, Z);
+    printf("X = %f, Y = %f, Z = %f\n", XYZ.X, XYZ.Y, XYZ.Z);
 
     // get xy
-    double x(0), y(0);
-    Spectrum::XYZtoXy(X, Y, Z, x, y);
-    printf("x = %f, y = %f\n", x, y);
+    Chromaticity xy;
+    Spectrum::XYZtoXy(XYZ, xy);
+    printf("x = %f, y = %f\n", xy. x, xy.y);
 
     // CCT and duv
-    uint16_t cct = Spectrum::CIE1931_xy_to_CCT(x, y);
-    uint16_t cct2 = Spectrum::CIE1931_xy_to_CCT_wikipedia(x, y);
-    double duv = Spectrum::CIE1931_xy_to_duv(x, y);
+    uint16_t cct = Spectrum::CIE1931_xy_to_CCT(xy);
+    uint16_t cct2 = Spectrum::CIE1931_xy_to_CCT_wikipedia(xy);
+    double duv = Spectrum::CIE1931_xy_to_duv(xy);
     printf("CCT = %dK, Duv = %f\n", cct, duv);
     printf("CCT = %dK (wikipedia)\n", cct2);
     printf("******************\n");
@@ -132,44 +132,33 @@ void SpectralSensor::checkChannelDataCalcs()
     printf("raw = %d \t counts = %f \t corr = %f\n", raw, basicCount, corrCount);
 }
 
-/* Photometric Results after XYZ Calibration(from xls)
-* "Simplest Calculation Method:
-This table is based on the (small) XYZ Calibration Matrix in the ""Correction
-Values"" Sheet, data from the ""Standards"" Sheet tables, and Sensor Data
-(Corr) Channel Data - Ref Column E on this page"
-
-source XML v3.0
-X	0.13498
-Y	0.14594
-Z	0.17119
-
-x	0.29856
-y	0.32279
-z	0.37865
-
-CCT 7413K
-*/
 void SpectralSensor::checkCIE1931Calcs(uint8_t noOfChannels)
 {
     printf("\n*** check CIE1931 calcs (%d channels) ***\n", noOfChannels);
 
-    double XYZ[3][1];
-    Spectrum::multiplyMatrices(calibrationMatrix, tstCorrectedCounts, XYZ, 3, noOfChannels);
+    double XYZmatrix[3][1]; // TODO improve!
+    Spectrum::multiplyMatrices(calibrationMatrix_v3, tstCorrectedCounts, XYZmatrix, 3, noOfChannels);
 
-    double X = XYZ[0][0];
-    double Y = XYZ[1][0];
-    double Z = XYZ[2][0];
+    double X = XYZmatrix[0][0];
+    double Y = XYZmatrix[1][0];
+    double Z = XYZmatrix[2][0];
 
     printf("X = %f, Y = %f, Z = %f\n", X, Y, Z);
 
+    // temp
+    Tristimulus XYZ;
+    XYZ.X = X;
+    XYZ.Y = Y;
+    XYZ.Z = Z;
+
     // get xy
-    double x(0), y(0);
-    Spectrum::XYZtoXy(X, Y, Z, x, y);
-    printf("x = %f, y = %f\n", x, y);
+    Chromaticity xy;
+    Spectrum::XYZtoXy(XYZ, xy);
+    printf("x = %f, y = %f\n", xy.x, xy.y);
 
     // CCT and duv
-    uint16_t cct = Spectrum::CIE1931_xy_to_CCT(x, y);
-    double duv = Spectrum::CIE1931_xy_to_duv(x, y);
+    uint16_t cct = Spectrum::CIE1931_xy_to_CCT(xy);
+    double duv = Spectrum::CIE1931_xy_to_duv(xy);
     printf("CCT = %dK, duv = %f\n", cct, duv);
 }
 
@@ -181,7 +170,7 @@ void SpectralSensor::verifySpectralReconstruction()
     const uint16_t visibleWavelengths = 780 - 380;
 
     double reconstructedSpectrum[wavelengths][1];
-    Spectrum::reconstructSpectrum(spectralCorrectionMatrix, tstCorrectedCounts, reconstructedSpectrum, wavelengths);
+    Spectrum::reconstructSpectrum(spectralCorrectionMatrix_v3, tstCorrectedCounts, reconstructedSpectrum, wavelengths);
 
     // dump 1st 20 values to screen
     for (uint16_t wavelength = 0; wavelength < 20; wavelength++)
@@ -190,24 +179,21 @@ void SpectralSensor::verifySpectralReconstruction()
     }
 
     // spectrum to XYZ
-    double X(0);
-    double Y(0);
-    double Z(0);
-
-    Spectrum::spectrumToXYZ_AMS(reconstructedSpectrum, X, Y, Z, visibleWavelengths);
-    printf("X = %f, Y = %f, Z = %f\n", X, Y, Z);
+    Tristimulus XYZ;
+    Spectrum::spectrumToXYZ_AMS(reconstructedSpectrum, XYZ, VISIBLE_WAVELENGTHS);
+    printf("X = %f, Y = %f, Z = %f\n", XYZ.X, XYZ.Y, XYZ.Z);
 
     //
     Spectrum::saveToCsv(reconstructedSpectrum, "reconstructedSpectrum.csv");
 
     // get xy
-    double x(0), y(0);
-    Spectrum::XYZtoXy(X, Y, Z, x, y);
-    printf("x = %f, y = %f\n", x, y);
+    Chromaticity xy;
+    Spectrum::XYZtoXy(XYZ, xy);
+    printf("x = %f, y = %f\n", xy.x, xy.y);
 
     // CCT and duv
-    uint16_t cct = Spectrum::CIE1931_xy_to_CCT(x, y);
-    double duv = Spectrum::CIE1931_xy_to_duv(x, y);
+    uint16_t cct = Spectrum::CIE1931_xy_to_CCT(xy);
+    double duv = Spectrum::CIE1931_xy_to_duv(xy);
     printf("CCT = %dK, duv = %f\n", cct, duv);
 }
 

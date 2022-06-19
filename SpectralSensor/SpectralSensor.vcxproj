@@ -135,18 +135,23 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="AS7341.cpp" />
+    <ClCompile Include="ColorRenderingIndex.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MCP2221.cpp" />
     <ClCompile Include="SpectralSensor.cpp" />
     <ClCompile Include="Spectrum.cpp" />
+    <ClCompile Include="SpectrumData.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AS7341.h" />
     <ClInclude Include="AS7341_I2C_registers.h" />
     <ClInclude Include="AS7341_values.h" />
+    <ClInclude Include="ColorRenderingIndex.h" />
     <ClInclude Include="MCP2221.h" />
     <ClInclude Include="SpectralSensor.h" />
     <ClInclude Include="Spectrum.h" />
+    <ClInclude Include="SpectrumData.h" />
+    <ClInclude Include="TestData.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
