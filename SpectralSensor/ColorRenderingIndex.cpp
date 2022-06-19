@@ -302,33 +302,6 @@ void ColorRenderingIndex::prepareReference(uint16_t CCT)
 
     convertToCIE1960(m_reference.XYZ, m_reference.u, m_reference.v);
     chromaticTransform(m_reference.u, m_reference.v, m_reference.c, m_reference.d);
-
-    //// u and v coordinates for each TCS in 1960
-    // double urefTCS[MAX_TCS];
-    // double vrefTCS[MAX_TCS];
-
-    //// c and d constants for TCS samples for use in Von Kries
-    // double crefTCS[MAX_TCS];
-    // double drefTCS[MAX_TCS];
-
-    // double Wref[MAX_TCS];
-    // double Uref[MAX_TCS];
-    // double Vref[MAX_TCS];
-
-    //// for each TCS
-    // for (uint8_t s = 0; s < MAX_TCS; s++)
-    //{
-    //     // convert chromaticities to the CIE 1960
-    //     convertToCIE1960(refTCSXYZ[s], urefTCS[s], vrefTCS[s]);
-
-    //    // von Kries chromatic transform
-    //    chromaticTransform(urefTCS[s], vrefTCS[s], crefTCS[s], drefTCS[s]);
-    //
-    //    // CIE 1964 (U*, V*, W*) color space
-    //    Wref[s] = 25 * pow(refTCSXYZ[s].Y, 1 / 3) - 17;
-    //    Uref[s] = 13 * Wref[s] * (urefTCS[s] - uref);
-    //    Vref[s] = 13 * Wref[s] * (vrefTCS[s] - vref);
-    //}
 }
 
 bool ColorRenderingIndex::verifyChromaticityDistance()
