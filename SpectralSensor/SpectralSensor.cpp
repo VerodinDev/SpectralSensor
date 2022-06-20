@@ -117,6 +117,9 @@ void SpectralSensor::takeReading()
 
 #else // use spectral calibration matrix
 
+    // create spectral correction matrix
+    uint8_t channels = 10;
+
     // reconstruct spectrum and get XYZ values
     vector<double> reconstructedSpectrum;
     reconstructedSpectrum.resize(ALL_WAVELENGTHS);
