@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <vector>
+
 namespace
 {
 
@@ -73,7 +75,7 @@ double tstBasicCounts[10] =
 
 // corrected counts
 // Source: AMS XML v3.0
-double tstCorrectedCounts[10][1] =
+std::vector<double> tstCorrectedCounts =
 {
 	0.0110571816,
 	0.0196640753,

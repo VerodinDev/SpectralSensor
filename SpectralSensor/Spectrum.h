@@ -4,12 +4,14 @@
 #include <string>
 #include <vector>
 
-const uint16_t ALL_WAVELENGTHS = 1000 - 380;    // +1?
+const uint16_t ALL_WAVELENGTHS = 1000 - 380 + 1;
 const uint16_t VISIBLE_WAVELENGTHS = 780 - 380 + 1;
 
 struct Tristimulus
 {
-    Tristimulus() : X(0), Y(0), Z(0) {}
+    Tristimulus() : X(0), Y(0), Z(0)
+    {
+    }
 
     double X;
     double Y;
@@ -18,7 +20,9 @@ struct Tristimulus
 
 struct Chromaticity
 {
-    Chromaticity() : x(0), y(0) {}
+    Chromaticity() : x(0), y(0)
+    {
+    }
 
     double x;
     double y;
@@ -27,30 +31,37 @@ struct Chromaticity
 class Spectrum
 {
   public:
+    typedef std::vector<std::vector<double>> Matrix;
+
     // AS7341 counts to XYZ
-    static void countsToXYZ(double correctionMatrix[][10], double countMatrix[][1], double &X, double &Y, double &Z);
+    static void countsToXYZ(const Matrix &correctionMatrix, const std::vector<double> &counts, Tristimulus &XYZ);
 
     // spectrum to XYZ
-    static void spectrumToXYZ(const std::vector<double>& spd, Tristimulus& XYZ);
-    static void spectrumToXYZ_AMS(double spectralData[][1], Tristimulus& XYZ, const uint16_t wavelengths);
+    static void spectrumToXYZ(const std::vector<double> &spd, Tristimulus &XYZ);
 
     // XYZ to xy
-    static void XYZtoXy(const Tristimulus& XYZ, Chromaticity& xy);
+    static void XYZtoXy(const Tristimulus &XYZ, Chromaticity &xy);
 
     // CIE 1931 xy to CCT
     // McCamy's approximation
-    static uint16_t CIE1931_xy_to_CCT(const Chromaticity& xy);
-    static uint16_t CIE1931_xy_to_CCT_wikipedia(const Chromaticity& xy);
+    static uint16_t CIE1931_xy_to_CCT(const Chromaticity &xy);
+    static uint16_t CIE1931_xy_to_CCT_wikipedia(const Chromaticity &xy);
 
     // CIE 1931 xy to Duv
-    static float CIE1931_xy_to_duv(const Chromaticity& xy);
+    static float CIE1931_xy_to_duv(const Chromaticity &xy);
 
-    // spectral reconstruction based on channel data
-    static void reconstructSpectrum(double spectralMatrix[][10], double countMatrix[][1], double reconstructedSpectrum[][1], const uint16_t wavelengths = 780 - 380);
+    // spectral reconstruction based on channel data (AMS specific)
+    static void reconstructSpectrum(const Matrix &spectralMatrix, const std::vector<double> &countMatrix,
+                                    std::vector<double> &reconstructedSpectrum);
 
     // save to CSV
-    static void saveToCsv(double spectralData[][1], std::string filename);
+    static void saveToCsv(const std::vector<double> &spd, const std::string &filename);
 
     // matrix multiplication
-    static void multiplyMatrices(double matrixA[][10], double matrixB[][1], double product[][1], const uint16_t rows, const uint8_t columns);
+    static void multiplyMatrices(const Matrix &matrixA, const Matrix &matrixB, Matrix &product,
+                                 const size_t rows, const size_t columns);
+
+    static void toMatrix(const std::vector<double>& values, Matrix& matrix);
+
+    static void toArray(const Matrix& matrix, std::vector<double>& values);
 };

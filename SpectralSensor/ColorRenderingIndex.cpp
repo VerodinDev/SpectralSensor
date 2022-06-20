@@ -60,6 +60,11 @@ void ColorRenderingIndex::loadTCSTable()
 // TODO use D65 as ref for >5000K
 void ColorRenderingIndex::calculateCRI(vector<double> &spd, uint8_t Ri[])
 {
+    for (uint8_t i = 0; i < MAX_TCS; i++)
+    {
+        Ri[i] = 0x00;
+    }
+
     const uint16_t noOfWavelengths(VISIBLE_WAVELENGTHS / 2);
     uint16_t CCT = getCCT(spd);
 
@@ -71,7 +76,7 @@ void ColorRenderingIndex::calculateCRI(vector<double> &spd, uint8_t Ri[])
     if (!verifyChromaticityDistance())
     {
         // TODO handle better
-        printf("Chromaticity distance too high");
+        printf("Chromaticity distance too high\n");
         return;
     }
 
@@ -205,9 +210,10 @@ void ColorRenderingIndex::prepareTestSPD(vector<double> &spd)
 {
     printf("*** Preparing test SPD ***\n");
 
-    // visible spectrum (in 2nm steps)
-    // TODO handle difference in steps
-    const uint16_t noOfWavelengths(VISIBLE_WAVELENGTHS / 2);
+    // 1nm or 2nm resolution
+    uint8_t stepsize = spd.size() > 201 ? 1 : 2;
+
+    const uint16_t noOfWavelengths(VISIBLE_WAVELENGTHS / stepsize);
 
     // get XYZ values
     Spectrum::spectrumToXYZ(spd, m_spd.XYZ);
@@ -219,7 +225,7 @@ void ColorRenderingIndex::prepareTestSPD(vector<double> &spd)
     {
         for (uint16_t k = 0; k < noOfWavelengths; k++)
         {
-            m_spd.refl[k] = spd[k] * m_TCS[k * 2][t]; // stepsize
+            m_spd.refl[k] = spd[k] * m_TCS[k * stepsize][t];
         }
 
         //
@@ -295,7 +301,7 @@ void ColorRenderingIndex::prepareReference(uint16_t CCT)
 
     normalizeTCS(m_reference.TCSXYZ, refNorm);
 
-    // XYZ again, reuse vars. TODO, expensive
+    // TODO XYZ again, expensive, reuse vars
     normalize(m_reference.reference);
     Spectrum::spectrumToXYZ(m_reference.reference, m_reference.XYZ);
 

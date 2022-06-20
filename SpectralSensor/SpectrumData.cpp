@@ -8,6 +8,7 @@ using namespace std;
 
 void SpectrumData::getXYZCalibrationMatrix()
 {
+    // TODO use vector
     double calibrationMatrix[3][10];
 
     readCSV("../data/XYZCorrectionMatrix_v3.0.csv", calibrationMatrix);

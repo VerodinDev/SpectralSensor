@@ -15,18 +15,16 @@ int main()
     printf("*** VERIFICATION MODE ***\n\n");
 
     SpectralSensor sensor;
+    sensor.loadCorrectionMatrix();
 
     // sensor.checkChannelDataCalcs();
     // sensor.checkCIE1931Calcs(10);
     // sensor.checkCIE1931Calcs(CHANNEL_F8);
-    // sensor.verifySpectralReconstruction();
+    //sensor.verifySpectralReconstruction();
 
-    // CSV testing
     try
     {
-        // calib matrix
-        // SpectrumData data;
-        // data.getXYZCalibrationMatrix();
+        printf("\n*** verify CRI calculation ***\n");
 
         // TCS table
         uint8_t Ri[MAX_TCS];
@@ -55,12 +53,13 @@ int main()
         // setup
         sensor.setupI2C();
         sensor.setupAS7341();
+        sensor.loadCorrectionMatrix();
 
         // take n readings
-        for (uint8_t readings = 0; readings < 5; readings++)
-        {
+        /*for (uint8_t readings = 0; readings < 5; readings++)
+        {*/
             sensor.takeReading();
-        }
+        //}
     }
     catch (const std::exception &e)
     {

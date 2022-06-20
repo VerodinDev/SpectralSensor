@@ -1,0 +1,39 @@
+*** Spectral sensor v0.1 ***
+
+Number of devices: 1
+Library Version: 2.2b
+Manufacturer descriptor: Microchip Technology Inc.
+Product descriptor: MCP2221 USB-I2C/UART Combo
+Serial number: 0003182469
+Factory serial: 01234567
+Device ID = 0x24, rev ID = 0x00, Aux ID = 0x00
+Init done
+Using spectral calibration matrix
+
+Reading all channels
+saturation = 0, gain status = 4
+
+F1      416      0.032774
+F2      1127     0.088789
+F3      1259     0.099189
+F4      2062     0.162452
+F5      2889     0.227606
+F6      3899     0.307177
+F7      6587     0.518947
+F8      5536     0.436146
+Clear   12693    1.000000
+NIR     1014     0.079887
+
+X = 1.174576, Y = 1.039978, Z = 0.501038
+x = 0.432530, y = 0.382965
+CCT = 2896K, Duv = -0.008038
+CCT = 3046K (wikipedia)
+CCT = 2896K
+*** Preparing reference ***
+*** Preparing test SPD ***
+XYZ = 114.116994, 101.039978, 48.678817
+xy = 0.432530, 0.382965
+Duv = -0.008038
+Chromaticity distance too high
+R1 = 0 R2 = 0 R3 = 0 R4 = 0 R5 = 0 R6 = 0 R7 = 0 R8 = 0 R9 = 0 R10 = 0 R11 = 0 R12 = 0 R13 = 0 R14 = 0
+******************
