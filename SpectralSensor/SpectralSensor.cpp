@@ -4,9 +4,14 @@
 #include "AS7341_values.h"
 #include "MCP2221.h"
 #include "Spectrum.h"
-#include <iostream>
+//#include <iostream>
 #include <mcp2221_dll_um.h>
-#include <stdexcept>
+//#include <stdexcept>
+#include <algorithm>
+#include <fstream>
+#include <sstream>
+
+using namespace std;
 
 // uncomment to use XYZ calibration matrix. Otherwise spectral calibration matrix is used
 //#define USE_XYZ_CALIBRATION_MATRIX
@@ -43,6 +48,30 @@ void SpectralSensor::setupAS7341()
 #endif
 }
 
+void SpectralSensor::loadCorrectionMatrix()
+{
+#ifdef USE_XYZ_CALIBRATION_MATRIX
+    string csvFile = "../data/XYZCorrectionMatrix_v3.0.0.csv";
+    uint16_t rows = 3;
+#else
+    string csvFile = "../data/SpectralCorrectionMatrix_v3.0.csv";
+    uint16_t rows = ALL_WAVELENGTHS;
+#endif
+
+    // create correction matrix
+    uint8_t channels = 10;
+    m_correctionMatrix.resize(rows);
+    for (uint16_t i = 0; i < ALL_WAVELENGTHS; i++)
+    {
+        m_correctionMatrix[i].resize(channels);
+    }
+
+    readCSV(csvFile, m_correctionMatrix);
+
+    // load TCS table
+    m_cri.loadTCSTable();
+}
+
 void SpectralSensor::takeReading()
 {
     // sensor.setLEDCurrent(15);
@@ -71,12 +100,12 @@ void SpectralSensor::takeReading()
     printf("NIR\t%d\t %f \n", m_pSensor->getRawValue(CHANNEL_NIR), m_pSensor->getCorrectedCount(CHANNEL_NIR));
     printf("\n");
 
-    // put in matrix
-    double countMatrix[10][1] = {0};
+    // array to vector
+    // TODO 
+    vector<double> correctedCountsV(10);
     for (int i = 0; i < 10; i++)
     {
-        countMatrix[i][0] = correctedCounts[i];
-        // printf("i=%d\n", i); OK
+        correctedCountsV[i] = correctedCounts[i];
     }
 
     // get XYZ
@@ -84,14 +113,22 @@ void SpectralSensor::takeReading()
 
 #ifdef USE_XYZ_CALIBRATION_MATRIX
 
-    Spectrum::countsToXYZ(calibrationMatrix_v3, countMatrix, X, Y, Z);
+    Spectrum::countsToXYZ(m_correctionMatrix, correctedCounts, XYZ);
 
 #else // use spectral calibration matrix
 
     // reconstruct spectrum and get XYZ values
-    double reconstructedSpectrum[ALL_WAVELENGTHS][1];
-    Spectrum::reconstructSpectrum(spectralCorrectionMatrix_v3, countMatrix, reconstructedSpectrum, ALL_WAVELENGTHS);
-    Spectrum::spectrumToXYZ_AMS(reconstructedSpectrum, XYZ, VISIBLE_WAVELENGTHS);
+    vector<double> reconstructedSpectrum;
+    reconstructedSpectrum.resize(ALL_WAVELENGTHS);
+
+    Spectrum::reconstructSpectrum(m_correctionMatrix, correctedCountsV, reconstructedSpectrum);
+
+    // only use visible spectrum from here on
+    reconstructedSpectrum.resize(VISIBLE_WAVELENGTHS);
+
+    Spectrum::saveToCsv(reconstructedSpectrum, "reconstructedSpectrum.csv");
+
+    Spectrum::spectrumToXYZ(reconstructedSpectrum, XYZ);
 
 #endif
 
@@ -100,7 +137,7 @@ void SpectralSensor::takeReading()
     // get xy
     Chromaticity xy;
     Spectrum::XYZtoXy(XYZ, xy);
-    printf("x = %f, y = %f\n", xy. x, xy.y);
+    printf("x = %f, y = %f\n", xy.x, xy.y);
 
     // CCT and duv
     uint16_t cct = Spectrum::CIE1931_xy_to_CCT(xy);
@@ -108,6 +145,18 @@ void SpectralSensor::takeReading()
     double duv = Spectrum::CIE1931_xy_to_duv(xy);
     printf("CCT = %dK, Duv = %f\n", cct, duv);
     printf("CCT = %dK (wikipedia)\n", cct2);
+
+    // CRI
+    uint8_t Ri[MAX_TCS];
+    m_cri.calculateCRI(reconstructedSpectrum, Ri);
+
+    for (uint8_t i = 0; i < MAX_TCS; i++)
+    {
+        printf("R%d = %d ", i + 1, Ri[i]);
+    }
+    printf("\n");
+
+
     printf("******************\n");
 }
 
@@ -136,20 +185,18 @@ void SpectralSensor::checkCIE1931Calcs(uint8_t noOfChannels)
 {
     printf("\n*** check CIE1931 calcs (%d channels) ***\n", noOfChannels);
 
-    double XYZmatrix[3][1]; // TODO improve!
-    Spectrum::multiplyMatrices(calibrationMatrix_v3, tstCorrectedCounts, XYZmatrix, 3, noOfChannels);
+    Matrix correctedCountsMatrix;
+    toMatrix(tstCorrectedCounts, correctedCountsMatrix);
 
-    double X = XYZmatrix[0][0];
-    double Y = XYZmatrix[1][0];
-    double Z = XYZmatrix[2][0];
+    Matrix XYZmatrix;
+    Spectrum::multiplyMatrices(m_correctionMatrix, correctedCountsMatrix, XYZmatrix, 3, noOfChannels);
 
-    printf("X = %f, Y = %f, Z = %f\n", X, Y, Z);
-
-    // temp
     Tristimulus XYZ;
-    XYZ.X = X;
-    XYZ.Y = Y;
-    XYZ.Z = Z;
+    XYZ.X = XYZmatrix[0][0];
+    XYZ.Y = XYZmatrix[1][0];
+    XYZ.Z = XYZmatrix[2][0];
+
+    printf("X = %f, Y = %f, Z = %f\n", XYZ.X, XYZ.Y, XYZ.Z);
 
     // get xy
     Chromaticity xy;
@@ -166,21 +213,26 @@ void SpectralSensor::verifySpectralReconstruction()
 {
     printf("\n*** verify spectral reconstruction ***\n");
 
-    const uint16_t wavelengths = 1000 - 380;
-    const uint16_t visibleWavelengths = 780 - 380;
+    const uint16_t wavelengths = ALL_WAVELENGTHS;
+    const uint16_t visibleWavelengths = VISIBLE_WAVELENGTHS;
 
-    double reconstructedSpectrum[wavelengths][1];
-    Spectrum::reconstructSpectrum(spectralCorrectionMatrix_v3, tstCorrectedCounts, reconstructedSpectrum, wavelengths);
+    vector<double> reconstructedSpectrum;
+    reconstructedSpectrum.resize(ALL_WAVELENGTHS);
+
+    Spectrum::reconstructSpectrum(m_correctionMatrix, tstCorrectedCounts, reconstructedSpectrum);
 
     // dump 1st 20 values to screen
     for (uint16_t wavelength = 0; wavelength < 20; wavelength++)
     {
-        printf("Wavelength %d = %f\n", wavelength + 380, reconstructedSpectrum[wavelength][0]);
+        printf("Wavelength %d = %f\n", wavelength + 380, reconstructedSpectrum[wavelength]);
     }
+
+    // only use visible spectrum from here on
+    reconstructedSpectrum.resize(VISIBLE_WAVELENGTHS);
 
     // spectrum to XYZ
     Tristimulus XYZ;
-    Spectrum::spectrumToXYZ_AMS(reconstructedSpectrum, XYZ, VISIBLE_WAVELENGTHS);
+    Spectrum::spectrumToXYZ(reconstructedSpectrum, XYZ);
     printf("X = %f, Y = %f, Z = %f\n", XYZ.X, XYZ.Y, XYZ.Z);
 
     //
@@ -198,3 +250,63 @@ void SpectralSensor::verifySpectralReconstruction()
 }
 
 #endif
+
+void SpectralSensor::toMatrix(const vector<double> &values, Matrix &matrix)
+{
+    // init
+    matrix.clear();
+    matrix.resize(values.size());
+
+    for (uint16_t row = 0; row < values.size(); row++)
+    {
+        matrix[row].resize(1);
+    }
+
+    // copy values
+    for (uint8_t i = 0; i < values.size(); i++)
+    {
+        matrix[i][0] = values[i];
+    }
+}
+
+void SpectralSensor::readCSV(const string &filename, Matrix &correctionMatrix)
+{
+    ifstream csvFile;
+
+    csvFile.open(filename, ifstream::in);
+    if (!csvFile.is_open())
+    {
+        throw runtime_error("Error opening data file " + filename);
+    }
+
+    string line;
+    uint16_t row(0);
+
+    // skip header
+    getline(csvFile, line);
+
+    // read values
+    // 380 0.2190 0.0700 0.0650 0.0740 0.2950 0.1500 0.3780 0.1040 0.0660 0.0500 0.1110 0.1200 0.1040 0.0360
+    while (getline(csvFile, line))
+    {
+        replace(line.begin(), line.end(), ';', ' ');
+
+        stringstream ss(line);
+        float value(0);
+        uint8_t column = 0;
+
+        // skip wavelength column
+        ss >> value;
+
+        // note that there is NO faulty input data check whatsoever!!!
+        while (ss >> value)
+        {
+            correctionMatrix[row][column] = value;
+            column++;
+        }
+
+        row++;
+    }
+
+    csvFile.close();
+}

@@ -76,14 +76,14 @@ class ColorRenderingIndex
 
     struct TestSPD
     {
-        std::vector<double> spd;
+        //std::vector<double> spd;
         std::vector<double> refl;
         Tristimulus XYZ;
         Tristimulus TCSXYZ[MAX_TCS];
-        double u;                       //< u and v coordinates for reference and test in 1960
-        double v;
-        double c;                       //< von Kries chromatic transform
-        double d;
+        double u = 0;                       //< u and v coordinates for reference and test in 1960
+        double v = 0;
+        double c = 0;                       //< von Kries chromatic transform
+        double d = 0;
     };
 
     struct Reference
@@ -92,10 +92,10 @@ class ColorRenderingIndex
         std::vector<double> refl;
         Tristimulus XYZ;
         Tristimulus TCSXYZ[MAX_TCS];
-        double u;                       //< u and v coordinates for reference and test in 1960
-        double v;
-        double c;                       //< von Kries chromatic transform
-        double d;
+        double u = 0;                       //< u and v coordinates for reference and test in 1960
+        double v = 0;
+        double c = 0;                       //< von Kries chromatic transform
+        double d = 0;
     };
 
     // SPD

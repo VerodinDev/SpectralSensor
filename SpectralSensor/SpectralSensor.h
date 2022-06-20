@@ -1,12 +1,15 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
+#include <string>
+#include "ColorRenderingIndex.h"
 
 class MCP2221;
 class AS7341;
 
 // enable calc verification against example values from AMS excel
-#define VERIFY_CALCS
+//#define VERIFY_CALCS
 
 class SpectralSensor
 {
@@ -16,6 +19,7 @@ class SpectralSensor
 
     void setupI2C();
     void setupAS7341();
+    void loadCorrectionMatrix();
     void takeReading();
 
 #ifdef VERIFY_CALCS
@@ -25,10 +29,20 @@ class SpectralSensor
 #endif
 
   private:
+    typedef std::vector<std::vector<double>> Matrix;
+
+    void toMatrix(const std::vector<double>& values, Matrix& matrix);
+
+    void readCSV(const std::string &filename, Matrix &correctionMatrix);
 
     // I2C controller
     MCP2221 *m_pI2cController;
 
     // spectral sensor
     AS7341 *m_pSensor;
+
+    // correction matrix
+    Matrix m_correctionMatrix;
+
+    ColorRenderingIndex m_cri;
 };
