@@ -4,6 +4,7 @@
 #include <cmath>
 #include "AS7341.h"
 #include <fstream>
+#include <algorithm>
 
 using namespace std;
 
@@ -30,36 +31,22 @@ void Spectrum::countsToXYZ(const Matrix& correctionMatrix, const vector<double>&
 void Spectrum::spectrumToXYZ(const vector<double>& spd, Tristimulus& XYZ)
 {
     uint8_t stepsize = spd.size() > 201 ? 1 : 2;
+    double Ysum(0);
 
     for (uint16_t i = 0; i < spd.size(); i++)
     {
         XYZ.X += spd[i] * cie1931[i * stepsize][0];
         XYZ.Y += spd[i] * cie1931[i * stepsize][1];
         XYZ.Z += spd[i] * cie1931[i * stepsize][2];
-    }
-}
 
-// X=0.499541, Y=0.361878, Z=0.105754
-//
-// https://www.waveformlighting.com/tech/calculate-color-temperature-cct-from-cie-1931-xy-coordinates/
-// CCT = 1872K
-// Duv = -0.0173
-//void Spectrum::spectrumToXYZ(double cie1931[][3], double spectralData[], double &X, double &Y, double &Z)
-//{
-//    double Ysum(0);
-//
-//    for (int i = 0; i < 401; i++)
-//    {
-//        X += cie1931[i][0] * spectralData[i];
-//        Y += cie1931[i][1] * spectralData[i];
-//        Z += cie1931[i][2] * spectralData[i];
-//        Ysum += cie1931[i][1];
-//    }
-//
-//    X *= 1 / Ysum;
-//    Y *= 1 / Ysum;
-//    Z *= 1 / Ysum;
-//}
+        Ysum += cie1931[i * stepsize][1];
+    }
+
+    // normalise
+    XYZ.X *= 1 / Ysum;
+    XYZ.Y *= 1 / Ysum;
+    XYZ.Z *= 1 / Ysum;
+}
 
 void Spectrum::XYZtoXy(const Tristimulus& XYZ, Chromaticity& xy)
 {
@@ -123,7 +110,7 @@ void Spectrum::reconstructSpectrum(const Matrix& spectralMatrix, const vector<do
     Matrix countMatrix;
     toMatrix(counts, countMatrix);
 
-    //
+    // temp matrix to store result
     Matrix reconstructedMatrix;
     reconstructedMatrix.resize(spectralMatrix.size());
     for (uint16_t row = 0; row < spectralMatrix.size(); row++)
@@ -134,6 +121,12 @@ void Spectrum::reconstructSpectrum(const Matrix& spectralMatrix, const vector<do
     multiplyMatrices(spectralMatrix, countMatrix, reconstructedMatrix, spectralMatrix.size(), 10);
 
     toArray(reconstructedMatrix, reconstructedSpectrum);
+
+    // only use visible spectrum from here on
+    reconstructedSpectrum.resize(VISIBLE_WAVELENGTHS);
+
+    // strip negative values
+    replace_if(reconstructedSpectrum.begin(), reconstructedSpectrum.end(), isNegative, 0);
 
     //// normalise
     //double highestValue(0);
@@ -186,15 +179,6 @@ void Spectrum::multiplyMatrices(const Matrix& matrixA, const Matrix& matrixB, Ma
     size_t rowB = columns, colB = 1;
     int i, j, k;
 
-    // init
-    //for (i = 0; i < rowA; i++)
-    //{
-    //    for (j = 0; j < colB; j++)
-    //    {
-    //        product[i][j] = 0;
-    //    }
-    //}
-
     // multiply
     for (i = 0; i < rowA; i++)
     {
@@ -233,4 +217,9 @@ void Spectrum::toArray(const Matrix& matrix, vector<double>& values)
     {
         values[i] = matrix[i][0];
     }
+}
+
+bool Spectrum::isNegative(double v)
+{
+    return (v < 0);
 }

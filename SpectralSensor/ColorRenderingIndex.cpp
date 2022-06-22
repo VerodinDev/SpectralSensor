@@ -57,42 +57,102 @@ void ColorRenderingIndex::loadTCSTable()
 //
 // Notes:
 // CCT < 5000K -> use Planckian radiator as the reference illuminant
-// TODO use D65 as ref for >5000K
-void ColorRenderingIndex::calculateCRI(vector<double> &spd, uint8_t Ri[])
+void ColorRenderingIndex::calculateCRI2(vector<double> &spd, uint8_t Ri[])
 {
+    // init
     for (uint8_t i = 0; i < MAX_TCS; i++)
     {
-        Ri[i] = 0x00;
+        Ri[i] = 0;
     }
 
-    const uint16_t noOfWavelengths(VISIBLE_WAVELENGTHS / 2);
-    uint16_t CCT = getCCT(spd);
+    // 1nm or 2nm resolution
+    uint8_t stepsize = spd.size() > 201 ? 1 : 2;
+    const uint16_t noOfWavelengths(VISIBLE_WAVELENGTHS / stepsize);
 
-    printf("CCT = %dK\n", CCT);
+    // get SPD XYZ
+    Tristimulus spdXYZ;
+    Spectrum::spectrumToXYZ(spd, spdXYZ);
+    printf("XYZ = %f, %f, %f\n", spdXYZ.X, spdXYZ.Y, spdXYZ.Z);
 
-    prepareReference(CCT);
-    prepareTestSPD(spd);
+    double YspdNormal = 100 / spdXYZ.Y;
+    //double Yspd = spdXYZ.Y * YspdNormal;
 
-    if (!verifyChromaticityDistance())
+    // get SPD u and v
+    double uSpd, vSpd;
+    convertToCIE1960(spdXYZ, uSpd, vSpd);
+    printf("convertToCIE1960: u = %f, v = %f\n", uSpd, vSpd);
+
+    // setup reference
+    prepareReference2(spd);
+
+    //
+    double tcsSpdY[MAX_TCS];
+    double tcsRefY[MAX_TCS];
+    double uTcsSpd[MAX_TCS];
+    double vTcsSpd[MAX_TCS];
+    double uTcsRef[MAX_TCS];
+    double vTcsRef[MAX_TCS];
+
+    printf("\n*** TCS reflexivity ***\n");
+
+    // get u and v for each TCS
+    for (uint8_t s = 0; s < MAX_TCS; s++)
     {
-        // TODO handle better
+        printf("\nTCS%d:\n", s + 1);
+
+        // SPD
+        vector<double> spdRefl(noOfWavelengths);
+        for (uint16_t k = 0; k < noOfWavelengths; k++)
+        {
+            spdRefl[k] = spd[k] * m_TCS[k * stepsize][s];
+        }
+
+        Tristimulus tcsSpdXYZ;
+        Spectrum::spectrumToXYZ(spdRefl, tcsSpdXYZ);
+        tcsSpdY[s] = tcsSpdXYZ.Y * YspdNormal;
+
+        convertToCIE1960(tcsSpdXYZ, uTcsSpd[s], vTcsSpd[s]);
+
+        printf("spd XYZ: %f, %f, %f\n", tcsSpdXYZ.X, tcsSpdXYZ.Y, tcsSpdXYZ.Z);
+        printf("spd uv : %f, %f\n", uTcsSpd[s], vTcsSpd[s]);
+
+        // reference
+        m_reference.refl.resize(noOfWavelengths);
+        for (uint16_t k = 0; k < noOfWavelengths; k++)
+        {
+            m_reference.refl[k] = m_reference.reference[k] * m_TCS[k * stepsize][s];
+        }
+
+        Tristimulus tcsRefXYZ;
+        Spectrum::spectrumToXYZ(m_reference.refl, tcsRefXYZ);
+        tcsRefY[s] = tcsRefXYZ.Y * m_reference.YNormal;
+
+        convertToCIE1960(tcsRefXYZ, uTcsRef[s], vTcsRef[s]);
+
+        printf("ref XYZ: %f, %f, %f\n", tcsRefXYZ.X, tcsRefXYZ.Y, tcsRefXYZ.Z);
+        printf("ref uv : %f, %f\n", uTcsRef[s], vTcsRef[s]);
+    }
+
+    printf("\n");
+
+    // check chromaticity distance
+    double DC = sqrt(pow(m_reference.u - uSpd, 2) + pow(m_reference.v - vSpd, 2));
+
+    if (DC > 0.0054)
+    {
         printf("Chromaticity distance too high\n");
+        printf("SPD uv = %f %f, ref uv = %f %f\n", uSpd, vSpd, m_reference.u, m_reference.v);
+
         return;
     }
 
-    printf("*** Calculating CRI ***\n");
+    // cromatic transform on SPD and reference
+    double cSpd, dSpd;
+    chromaticTransform(uSpd, vSpd, cSpd, dSpd);
+    chromaticTransform(m_reference.u, m_reference.v, m_reference.c, m_reference.d);
 
-    // u and v coordinates for each TCS in 1960
-    double urefTCS[MAX_TCS];
-    double vrefTCS[MAX_TCS];
-    double utestTCS[MAX_TCS];
-    double vtestTCS[MAX_TCS];
-
-    // c and d constants for TCS samples
-    double crefTCS[MAX_TCS];
-    double drefTCS[MAX_TCS];
-    double ctestTCS[MAX_TCS];
-    double dtestTCS[MAX_TCS];
+    double cTcsSpd[MAX_TCS];
+    double dTcsSpd[MAX_TCS];
 
     //  Von Kries
     double vku[MAX_TCS];
@@ -109,30 +169,22 @@ void ColorRenderingIndex::calculateCRI(vector<double> &spd, uint8_t Ri[])
     // colour difference
     double Euc[MAX_TCS];
 
-    // for each TCS
     for (uint8_t s = 0; s < MAX_TCS; s++)
     {
-        // find coordinates of the light reflected in CIE 1964 color space
-        // convert chromaticities to the CIE 1960
-        convertToCIE1960(m_reference.TCSXYZ[s], urefTCS[s], vrefTCS[s]);
-        convertToCIE1960(m_spd.TCSXYZ[s], utestTCS[s], vtestTCS[s]);
+        chromaticTransform(uTcsSpd[s], vTcsSpd[s], cTcsSpd[s], dTcsSpd[s]);
 
-        chromaticTransform(urefTCS[s], vrefTCS[s], crefTCS[s], drefTCS[s]);
-        chromaticTransform(utestTCS[s], vtestTCS[s], ctestTCS[s], dtestTCS[s]);
-
-        // find corresponding color (uc,i, vc,i)
         // von Kries chromatic transform
-        double cn = (m_reference.c / m_spd.c) * ctestTCS[s];
-        double dn = (m_reference.d / m_spd.d) * dtestTCS[s];
+        double cn = m_reference.c / cSpd * cTcsSpd[s];
+        double dn = m_reference.d / dSpd * dTcsSpd[s];
         vku[s] = (10.872 + 0.404 * cn - 4 * dn) / (16.518 + 1.481 * cn - dn);
-        vkv[s] = 5.52 / (16.518 + 1.481 * cn - dn);
+        vkv[s] = 5.520 / (16.518 + 1.481 * cn - dn);
 
-        // CIE 1964 (U*, V*, W*) color space
-        Wref[s] = 25 * pow(m_reference.TCSXYZ[s].Y, 1 / 3) - 17;
-        Uref[s] = 13 * Wref[s] * (urefTCS[s] - m_reference.u);
-        Vref[s] = 13 * Wref[s] * (vrefTCS[s] - m_reference.v);
+        // transformation into 1964
+        Wref[s] = 25 * pow(tcsRefY[s], 1 / 3) - 17;
+        Uref[s] = 13 * Wref[s] * (uTcsRef[s] - m_reference.u);
+        Vref[s] = 13 * Wref[s] * (vTcsRef[s] - m_reference.v);
 
-        Wtest[s] = 25 * pow(m_spd.TCSXYZ[s].Y, 1 / 3) - 17;
+        Wtest[s] = 25 * pow(tcsSpdY[s], 1 / 3) - 17;
         Utest[s] = 13 * Wtest[s] * (vku[s] - m_reference.u);
         Vtest[s] = 13 * Wtest[s] * (vkv[s] - m_reference.v);
 
@@ -144,7 +196,7 @@ void ColorRenderingIndex::calculateCRI(vector<double> &spd, uint8_t Ri[])
     }
 }
 
-void ColorRenderingIndex::normalize(vector<double> values)
+void ColorRenderingIndex::normalize(vector<double> &values)
 {
     double highestValue(0);
 
@@ -182,7 +234,50 @@ void ColorRenderingIndex::convertToCIE1960(const Tristimulus &XYZ, double &u, do
     u = 4 * XYZ.X / n;
     v = 6 * XYZ.Y / n;
 
-    // printf("convertToCIE1960 u = %f, v = %f\n", u, v);
+    // debug E21A mix
+    // Osram CC: u = 0.2558 v = 0.5100
+
+    // debug FW3A 2700K
+    // Osram CC: u = 0.2666   v = 0.5384
+    // this:     u = 0.266605 v = 0.358944
+
+    // printf("convertToCIE1960 (XYZ):\t\t u = %f, v = %f\n", u, v);
+}
+
+void ColorRenderingIndex::convertToCIE1960(const Chromaticity &xy, double &u, double &v)
+{
+    // MacAdam simplified Judd's
+    double n = 12 * xy.y - 2 * xy.x + 3;
+    u = (4 * xy.x) / n;
+    v = (6 * xy.y) / n;
+    // printf("convertToCIE1960: u = %f, v = %f\n", u, v);
+
+    // using Judd results in very different values, e.g.
+    // convertToCIE1960(MacAdam xy) : u = 0.266605, v = 0.358944
+    // convertToCIE1960(Judd xy) xy : u = 0.489688, v = 0.474900
+    // convertToCIE1960(XYZ) : u = 0.266605, v = 0.358944
+
+    //// Judd 1
+    // double m = xy.y - 0.15735 * xy.x + 0.2424;
+    // u = (0.4661 * xy.x + 0.1593 * xy.y) / m;
+    // v = (0.6581 * xy.y) / m;
+
+    // printf("convertToCIE1960 (Judd xy) xy:\t u = %f, v = %f\n", u, v);
+
+    //// Judd 2
+    // double p = 12 * xy.y - 1.882 * xy.x + 2.9088;
+    // u = (5.5932 * xy.x + 1.9116 * xy.y) / p;
+    // v = (7.8972 * xy.y) / p;
+
+    // printf("convertToCIE1960 (Judd xy) xy:\t u = %f, v = %f\n", u, v);
+}
+
+void ColorRenderingIndex::convertToCIE1976(const Chromaticity &xy, double &u, double &v)
+{
+    double n = 12 * xy.y - 2 * xy.x + 3;
+    u = (4 * xy.x) / n;
+    v = (9 * xy.y) / n;
+    // printf("convertToCIE1976: u' = %f, v' = %f\n", u, v);
 }
 
 void ColorRenderingIndex::chromaticTransform(double u, double v, double &c, double &d)
@@ -193,136 +288,86 @@ void ColorRenderingIndex::chromaticTransform(double u, double v, double &c, doub
     // printf("chromaticTransform c = %f, d = %f\n", c, d);
 }
 
-uint16_t ColorRenderingIndex::getCCT(std::vector<double> &spd)
+uint16_t ColorRenderingIndex::getCCT(const std::vector<double> &spd)
 {
     Tristimulus XYZ;
     Chromaticity xy;
 
-    //{X = 0.096242674146876345 Y = 0.31466154678143538 Z = 0.15518062272351676 }
-    //{x=0.17001457506972328 y=0.55585580555654046 }
-    // CIE 1931 xy Result : (0.525, 0.4141)
     Spectrum::spectrumToXYZ(spd, XYZ);
     Spectrum::XYZtoXy(XYZ, xy);
+
+    // debug
+    uint16_t CCTwp = Spectrum::CIE1931_xy_to_CCT_wikipedia(xy);
+    printf("CCT = %dK (Wikipedia)\n", CCTwp);
+
     return Spectrum::CIE1931_xy_to_CCT(xy);
 }
 
-void ColorRenderingIndex::prepareTestSPD(vector<double> &spd)
-{
-    printf("*** Preparing test SPD ***\n");
-
-    // 1nm or 2nm resolution
-    uint8_t stepsize = spd.size() > 201 ? 1 : 2;
-
-    const uint16_t noOfWavelengths(VISIBLE_WAVELENGTHS / stepsize);
-
-    // get XYZ values
-    Spectrum::spectrumToXYZ(spd, m_spd.XYZ);
-
-    // ?
-    m_spd.refl.resize(noOfWavelengths);
-
-    for (uint8_t t = 0; t < MAX_TCS; t++)
-    {
-        for (uint16_t k = 0; k < noOfWavelengths; k++)
-        {
-            m_spd.refl[k] = spd[k] * m_TCS[k * stepsize][t];
-        }
-
-        //
-        Spectrum::spectrumToXYZ(m_spd.refl, m_spd.TCSXYZ[t]);
-    }
-
-    // normalize XYZ values based on original
-    const double norm = 100 / m_spd.XYZ.Y;
-    m_spd.XYZ.X = m_spd.XYZ.X * norm;
-    m_spd.XYZ.Y = m_spd.XYZ.Y * norm;
-    m_spd.XYZ.Z = m_spd.XYZ.Z * norm;
-
-    normalizeTCS(m_spd.TCSXYZ, norm);
-
-    // XYZ again, reuse vars. TODO, expensive
-    Spectrum::spectrumToXYZ(spd, m_spd.XYZ);
-
-    // DEBUG
-    Chromaticity xy;
-    Spectrum::XYZtoXy(m_spd.XYZ, xy);
-    float duv = Spectrum::CIE1931_xy_to_duv(xy);
-    printf("XYZ = %f, %f, %f\n", m_spd.XYZ.X, m_spd.XYZ.Y, m_spd.XYZ.Z);
-    printf("xy = %f, %f\n", xy.x, xy.y);
-    printf("Duv = %f\n", duv);
-
-    // u and v coordinates for test SPD in 1960
-    convertToCIE1960(m_spd.XYZ, m_spd.u, m_spd.v);
-    chromaticTransform(m_spd.u, m_spd.v, m_spd.c, m_spd.d);
-
-    // xy coreect, duv too high, v incorrect
-}
-
-void ColorRenderingIndex::prepareReference(uint16_t CCT)
+// TODO use D65 as ref for >5000K
+void ColorRenderingIndex::prepareReference2(const vector<double> &spd)
 {
     printf("*** Preparing reference ***\n");
+
+    uint16_t CCT = getCCT(spd);
+
+    printf("CCT = %dK\n", CCT);
 
     if (CCT > 5000)
     {
         throw runtime_error("CCT > 5000K not supported yet");
     }
 
-    // visible spectrum (in 2nm steps)
-    const uint16_t noOfWavelengths(VISIBLE_WAVELENGTHS / 2);
+    // 1nm or 2nm resolution
+    uint8_t stepsize = spd.size() > 201 ? 1 : 2;
+
+    const uint16_t noOfWavelengths(VISIBLE_WAVELENGTHS / stepsize);
 
     m_reference.reference.resize(noOfWavelengths);
     m_reference.refl.resize(noOfWavelengths);
 
     for (int i = 0; i < noOfWavelengths; i++)
     {
-        m_reference.reference[i] = bb_spectrum(i * 2 + 380, CCT);
+        m_reference.reference[i] = getPlanckianLocus(i * stepsize + 380, CCT);
     }
 
     normalize(m_reference.reference);
 
     Spectrum::spectrumToXYZ(m_reference.reference, m_reference.XYZ);
-
-    // ?
-    for (uint8_t t = 0; t < MAX_TCS; t++)
-    {
-        for (uint16_t k = 0; k < noOfWavelengths; k++)
-        {
-            m_reference.refl[k] = m_reference.reference[k] * m_TCS[k * 2][t]; // k*2? stepsize
-        }
-
-        Spectrum::spectrumToXYZ(m_reference.refl, m_reference.TCSXYZ[t]);
-    }
-
-    // normalize the XYZ values based on original
-    const double refNorm = 100 / m_reference.XYZ.Y;
-    m_reference.XYZ.X = m_reference.XYZ.X * refNorm;
-    m_reference.XYZ.Y = m_reference.XYZ.Y * refNorm;
-    m_reference.XYZ.Z = m_reference.XYZ.Z * refNorm;
-
-    normalizeTCS(m_reference.TCSXYZ, refNorm);
-
-    // TODO XYZ again, expensive, reuse vars
-    normalize(m_reference.reference);
-    Spectrum::spectrumToXYZ(m_reference.reference, m_reference.XYZ);
+    m_reference.YNormal = 100 / m_reference.XYZ.Y;
+    //double Yref = m_reference.XYZ.Y * m_reference.YNormal;
 
     convertToCIE1960(m_reference.XYZ, m_reference.u, m_reference.v);
-    chromaticTransform(m_reference.u, m_reference.v, m_reference.c, m_reference.d);
+
+    // u = 0.26312380320845397
+    // v = 0.35174945096434301
+    // CCT	x (black body)	y (black body)	u' (black body)	v' (black body)	y (daylight)	y (TM30)
+    // 2686	0.461007723031611	0.410854252624604	0.263123416678460	0.527620430070558		0.410854252624604
 }
 
-bool ColorRenderingIndex::verifyChromaticityDistance()
+//bool ColorRenderingIndex::verifyChromaticityDistance()
+//{
+//    double DC = sqrt(pow(m_reference.u - m_spd.u, 2) + pow(m_reference.v - m_spd.v, 2));
+//
+//    if (DC > 0.0054)
+//    {
+//        return false;
+//    }
+//    else
+//    {
+//        return true;
+//    }
+//}
+
+double ColorRenderingIndex::getPlanckianLocus(uint16_t wavelength, uint16_t T)
 {
-    double DC = sqrt(pow(m_reference.u - m_spd.u, 2) + pow(m_reference.v - m_spd.v, 2));
+    // c1 = 2 * pi * h * c ^ 2;
+    // c2 = h * c / k;
 
-    return (DC > 0.0054) ? false : true;
-}
+    double c1 = 3.74183e-16;                // 1st radiation constant
+    double c2 = 1.4388e-2;                  // 2nd radiation constant
+    double wavelengthM = wavelength * 1e-9; // wavelength in meter
 
-double ColorRenderingIndex::bb_spectrum(uint16_t wavelength, uint16_t CCT)
-{
-    // wavelength in meters
-    double wavelengthMeter = wavelength * 1e-9;
-    double radiationConstant = 1.4388e-2; // 2nd radiation constant (International Temperature Scale)
-
-    return (3.74183e-16 * pow(wavelengthMeter, -5.0)) / (exp(radiationConstant / (wavelengthMeter * CCT)) - 1.0);
+    return (c1 * pow(wavelengthM, -5.0)) / (exp(c2 / (wavelengthM * T)) - 1.0);
 }
 
 // TODO merge with one in spectrumdata. FileOps.cpp?

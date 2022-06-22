@@ -126,9 +126,6 @@ void SpectralSensor::takeReading()
 
     Spectrum::reconstructSpectrum(m_correctionMatrix, correctedCountsV, reconstructedSpectrum);
 
-    // only use visible spectrum from here on
-    reconstructedSpectrum.resize(VISIBLE_WAVELENGTHS);
-
     Spectrum::saveToCsv(reconstructedSpectrum, "reconstructedSpectrum.csv");
 
     Spectrum::spectrumToXYZ(reconstructedSpectrum, XYZ);
@@ -151,14 +148,13 @@ void SpectralSensor::takeReading()
 
     // CRI
     uint8_t Ri[MAX_TCS];
-    m_cri.calculateCRI(reconstructedSpectrum, Ri);
+    m_cri.calculateCRI2(reconstructedSpectrum, Ri);
 
     for (uint8_t i = 0; i < MAX_TCS; i++)
     {
         printf("R%d = %d ", i + 1, Ri[i]);
     }
     printf("\n");
-
 
     printf("******************\n");
 }
@@ -229,9 +225,6 @@ void SpectralSensor::verifySpectralReconstruction()
     {
         printf("Wavelength %d = %f\n", wavelength + 380, reconstructedSpectrum[wavelength]);
     }
-
-    // only use visible spectrum from here on
-    reconstructedSpectrum.resize(VISIBLE_WAVELENGTHS);
 
     // spectrum to XYZ
     Tristimulus XYZ;

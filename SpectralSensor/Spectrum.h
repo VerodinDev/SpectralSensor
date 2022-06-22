@@ -64,4 +64,6 @@ class Spectrum
     static void toMatrix(const std::vector<double>& values, Matrix& matrix);
 
     static void toArray(const Matrix& matrix, std::vector<double>& values);
+
+    static bool isNegative(double v);
 };
