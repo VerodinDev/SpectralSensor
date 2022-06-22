@@ -31,13 +31,18 @@ int main()
 
         ColorRenderingIndex cri;
         cri.loadTCSTable();
-        cri.calculateCRI(candleSpd, Ri);
+        cri.calculateCRI2(/*FW3A_2700*/ white_2700_osram, Ri);
 
+        printf("Result:\n");
         for (uint8_t i = 0; i < MAX_TCS; i++)
         {
-            printf("R%d = %d ", i + 1, Ri[i]);
+            printf("R%d: %d | ", i + 1, Ri[i]);
         }
         printf("\n");
+
+        // Ra based on R1 to R8
+        // uint16_t Rsum = accumulate(vector.begin(), vector.end(), ecltype(vector)::value_type(0));
+        // uint8_t Ra = Rsum / 8;
     }
     catch (const std::exception &e)
     {
