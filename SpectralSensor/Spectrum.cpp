@@ -1,54 +1,67 @@
 #include "Spectrum.h"
 
-#include "AS7341_values.h"  // sensor specific calibration matrix
-#include <cmath>
-#include "AS7341.h"
-#include <fstream>
 #include <algorithm>
+#include <fstream>
+#include <sstream>
 
 using namespace std;
 
-void Spectrum::countsToXYZ(const Matrix& correctionMatrix, const vector<double>& counts, Tristimulus& XYZ)
+Spectrum::Spectrum()
 {
-    // put counts into matrix
-    Matrix countMatrix;
-    countMatrix.resize(counts.size());
-    for (uint8_t i = 0; i < counts.size(); i++)
-    {
-        countMatrix[i][0] = counts[i];
-    }
-
-    Matrix XYZmatrix;
-    XYZmatrix.resize(3);
-    multiplyMatrices(correctionMatrix, countMatrix, XYZmatrix, XYZmatrix.size(), counts.size());
-
-    // get XYZ from matrix
-    XYZ.X = XYZmatrix[0][0];
-    XYZ.Y = XYZmatrix[1][0];
-    XYZ.Z = XYZmatrix[2][0];
+    loadCIE1931Table();
 }
 
-void Spectrum::spectrumToXYZ(const vector<double>& spd, Tristimulus& XYZ)
+Spectrum::Spectrum(const std::vector<double> &spd) : m_spd(spd)
 {
-    uint8_t stepsize = spd.size() > 201 ? 1 : 2;
-    double Ysum(0);
-
-    for (uint16_t i = 0; i < spd.size(); i++)
-    {
-        XYZ.X += spd[i] * cie1931[i * stepsize][0];
-        XYZ.Y += spd[i] * cie1931[i * stepsize][1];
-        XYZ.Z += spd[i] * cie1931[i * stepsize][2];
-
-        Ysum += cie1931[i * stepsize][1];
-    }
-
-    // normalise
-    XYZ.X *= 1 / Ysum;
-    XYZ.Y *= 1 / Ysum;
-    XYZ.Z *= 1 / Ysum;
+    loadCIE1931Table();
 }
 
-void Spectrum::XYZtoXy(const Tristimulus& XYZ, Chromaticity& xy)
+std::vector<double> &Spectrum::getSpd()
+{
+    return m_spd;
+}
+
+uint16_t Spectrum::getNoOfWavelengths() const
+{
+    return static_cast<uint16_t>(m_spd.size());
+}
+
+void Spectrum::normalize()
+{
+    double highestValue(0);
+
+    for (uint16_t i = 0; i < m_spd.size(); i++)
+    {
+        if (m_spd[i] > highestValue)
+        {
+            highestValue = m_spd[i];
+        }
+    }
+
+    for (uint16_t i = 0; i < m_spd.size(); i++)
+    {
+        m_spd[i] /= highestValue;
+    }
+}
+
+void Spectrum::resize(uint16_t newSize)
+{
+    m_spd.resize(newSize);
+}
+
+void Spectrum::getXYZ(Tristimulus &XYZ) const
+{
+    uint8_t stepsize = m_spd.size() > 201 ? 1 : 2;
+
+    for (uint16_t i = 0; i < m_spd.size(); i++)
+    {
+        XYZ.X += m_spd[i] * m_cie1931Table[i * stepsize][0];
+        XYZ.Y += m_spd[i] * m_cie1931Table[i * stepsize][1];
+        XYZ.Z += m_spd[i] * m_cie1931Table[i * stepsize][2];
+    }
+}
+
+void Spectrum::XYZtoXy(const Tristimulus &XYZ, Chromaticity &xy) const
 {
     double XYZsum = XYZ.X + XYZ.Y + XYZ.Z;
 
@@ -56,7 +69,7 @@ void Spectrum::XYZtoXy(const Tristimulus& XYZ, Chromaticity& xy)
     xy.y = XYZ.Y / XYZsum;
 }
 
-uint16_t Spectrum::CIE1931_xy_to_CCT(const Chromaticity& xy)
+uint16_t Spectrum::xyToCCT(const Chromaticity &xy) const
 {
     // See below for the formula used to approximate CCT using CIE 1931 xy values :
     // McCamy's approximation
@@ -70,7 +83,7 @@ uint16_t Spectrum::CIE1931_xy_to_CCT(const Chromaticity& xy)
     return cct;
 }
 
-uint16_t Spectrum::CIE1931_xy_to_CCT_wikipedia(const Chromaticity& xy)
+uint16_t Spectrum::xyToCCT_wikipedia(const Chromaticity &xy) const
 {
     double n = (xy.x - 0.325) / (xy.y - 0.154);
     uint16_t cct = static_cast<uint16_t>(-449 * pow(n, 3) + 3525 * pow(n, 2) - 6823.3 * n + 5520.33);
@@ -78,13 +91,23 @@ uint16_t Spectrum::CIE1931_xy_to_CCT_wikipedia(const Chromaticity& xy)
     return cct;
 }
 
-// from waveformlighting.com
-float Spectrum::CIE1931_xy_to_duv(const Chromaticity& xy)
+uint16_t Spectrum::getCCT() const
 {
-    // AMS
-    // double u = 4 * X / (X + 15 * Y + 3 * Z);
-    // double v = 9 * X / (X + 15 * Y + 3 * Z);
+    Tristimulus XYZ;
+    Chromaticity xy;
 
+    getXYZ(XYZ);
+    XYZtoXy(XYZ, xy);
+
+    // debug
+    uint16_t CCTwp = xyToCCT_wikipedia(xy);
+    printf("CCT = %dK (Wikipedia)\n", CCTwp);
+
+    return xyToCCT(xy);
+}
+
+float Spectrum::xyToDuv(const Chromaticity &xy) const
+{
     // convert chromaticities to CIE 1960
     double u = (4 * xy.x) / (-2 * xy.x + 12 * xy.y + 3);
     double v = (6 * xy.y) / (-2 * xy.x + 12 * xy.y + 3);
@@ -105,121 +128,90 @@ float Spectrum::CIE1931_xy_to_duv(const Chromaticity& xy)
     return static_cast<float>(Lfp - Lbb);
 }
 
-void Spectrum::reconstructSpectrum(const Matrix& spectralMatrix, const vector<double>& counts, vector<double>& reconstructedSpectrum)
+double &Spectrum::operator[](int i)
 {
-    Matrix countMatrix;
-    toMatrix(counts, countMatrix);
-
-    // temp matrix to store result
-    Matrix reconstructedMatrix;
-    reconstructedMatrix.resize(spectralMatrix.size());
-    for (uint16_t row = 0; row < spectralMatrix.size(); row++)
+    if (i > m_spd.size())
     {
-        reconstructedMatrix[row].resize(1);
+        // cout << "Index out of bounds" << endl;
+        return m_spd[0];
     }
 
-    multiplyMatrices(spectralMatrix, countMatrix, reconstructedMatrix, spectralMatrix.size(), 10);
-
-    toArray(reconstructedMatrix, reconstructedSpectrum);
-
-    // only use visible spectrum from here on
-    reconstructedSpectrum.resize(VISIBLE_WAVELENGTHS);
-
-    // strip negative values
-    replace_if(reconstructedSpectrum.begin(), reconstructedSpectrum.end(), isNegative, 0);
-
-    //// normalise
-    //double highestValue(0);
-
-    //for (uint16_t i = 0; i < wavelengths; i++)
-    //{
-    //    if (reconstructedSpectrum[i][0] > highestValue)
-    //    {
-    //        highestValue = reconstructedSpectrum[i][0];
-    //    }
-    //}
-    //
-    //for (uint16_t i = 0; i < wavelengths; i++)
-    //{
-    //    reconstructedSpectrum[i][0] /= highestValue;
-    //}
+    return m_spd[i];
 }
 
-void Spectrum::saveToCsv(const vector<double>& spd, const std::string& filename)
+void Spectrum::saveToCsv(const std::string &filename)
 {
     std::ofstream cvsFile;
-    
+
     //__DATE__ __TIME__
 
     cvsFile.open(filename);
 
     // header
-    //cvsFile << "nm  value" << std::endl;
+    // cvsFile << "nm  value" << std::endl;
 
     // values
-    for (uint16_t wavelength = 0; wavelength < spd.size(); wavelength++)
+    for (uint16_t wavelength = 0; wavelength < m_spd.size(); wavelength++)
     {
-        cvsFile << wavelength + 380 << " " << spd[wavelength] << std::endl;
+        cvsFile << wavelength + 380 << " " << m_spd[wavelength] << std::endl;
     }
 
     cvsFile.close();
 }
 
-// excel, photometric results
-// correct sensor data (gain corrected * factor - offset)) 1x10 matrix
-//
-//		Fn
-// X	n
-// Y	n
-// Z	n
-void Spectrum::multiplyMatrices(const Matrix& matrixA, const Matrix& matrixB, Matrix& product, const size_t rows, const size_t columns)
+void Spectrum::loadCIE1931Table()
 {
-    // columns of matrix A must be equal to rows of matrix B
-    size_t rowA = rows, colA = columns;
-    size_t rowB = columns, colB = 1;
-    int i, j, k;
+    // init CIE1931 table
+    uint16_t rows = VISIBLE_WAVELENGTHS;
+    uint8_t cols = 3;
+    m_cie1931Table.resize(rows);
 
-    // multiply
-    for (i = 0; i < rowA; i++)
+    for (uint16_t i = 0; i < rows; i++)
     {
-        for (j = 0; j < colB; j++)
+        m_cie1931Table[i].resize(cols);
+    }
+
+    readCSV("../data/CIE1931 2degree.csv", m_cie1931Table);
+}
+
+void Spectrum::readCSV(const string &filename, CIE1931Table &table)
+{
+    ifstream csvFile;
+
+    csvFile.open(filename, ifstream::in);
+    if (!csvFile.is_open())
+    {
+        throw runtime_error("Error opening data file " + filename);
+    }
+
+    string line;
+    uint16_t row(0);
+
+    // skip header
+    getline(csvFile, line);
+
+    // read values
+    // wl X Y Z
+    while (getline(csvFile, line))
+    {
+        replace(line.begin(), line.end(), ';', ' ');
+
+        stringstream ss(line);
+        float value(0);
+        uint8_t column = 0;
+
+        // skip wavelength column
+        ss >> value;
+
+        // note that there is NO faulty input data check whatsoever!!!
+        while (ss >> value)
         {
-            for (k = 0; k < colA; k++)
-            {
-                product[i][j] += matrixA[i][k] * matrixB[k][j];
-                //printf("i=%d j=%d k=%d\n", i, j, k); OK
-            }
+            table[row][column] = value;
+            column++;
         }
-    }
-}
 
-void Spectrum::toMatrix(const vector<double>& values, Matrix& matrix)
-{
-    // init
-    matrix.clear();
-    matrix.resize(values.size());
-
-    for (uint16_t row = 0; row < values.size(); row++)
-    {
-        matrix[row].resize(1);
+        row++;
     }
 
-    // copy values
-    for (uint8_t i = 0; i < values.size(); i++)
-    {
-        matrix[i][0] = values[i];
-    }
-}
-
-void Spectrum::toArray(const Matrix& matrix, vector<double>& values)
-{
-    for (uint16_t i = 0; i < matrix.size(); i++)
-    {
-        values[i] = matrix[i][0];
-    }
-}
-
-bool Spectrum::isNegative(double v)
-{
-    return (v < 0);
+    csvFile.close();
 }

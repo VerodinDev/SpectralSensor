@@ -31,7 +31,13 @@ class SpectralSensor
   private:
     typedef std::vector<std::vector<double>> Matrix;
 
+#ifdef VERIFY_CALCS
+    void multiplyMatrices(const Matrix& matrixA, const Matrix& matrixB, Matrix& product, const size_t rows, const size_t columns);
+
     void toMatrix(const std::vector<double>& values, Matrix& matrix);
+
+    void toArray(const Matrix& matrix, std::vector<double>& values);
+#endif
 
     void readCSV(const std::string &filename, Matrix &correctionMatrix);
 

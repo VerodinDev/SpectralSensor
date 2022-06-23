@@ -101,7 +101,7 @@ void SpectralSensor::takeReading()
     printf("\n");
 
     // array to vector
-    // TODO 
+    // TODO
     vector<double> correctedCountsV(10);
     for (int i = 0; i < 10; i++)
     {
@@ -121,14 +121,15 @@ void SpectralSensor::takeReading()
     uint8_t channels = 10;
 
     // reconstruct spectrum and get XYZ values
-    vector<double> reconstructedSpectrum;
-    reconstructedSpectrum.resize(ALL_WAVELENGTHS);
+    vector<double> reconstructedSpd;
+    reconstructedSpd.resize(ALL_WAVELENGTHS);
 
-    Spectrum::reconstructSpectrum(m_correctionMatrix, correctedCountsV, reconstructedSpectrum);
+    m_pSensor->reconstructSpectrum(m_correctionMatrix, correctedCountsV, reconstructedSpd);
 
-    Spectrum::saveToCsv(reconstructedSpectrum, "reconstructedSpectrum.csv");
+    Spectrum reconstructedSpectrum(reconstructedSpd);
+    reconstructedSpectrum.saveToCsv("reconstructedSpectrum.csv");
 
-    Spectrum::spectrumToXYZ(reconstructedSpectrum, XYZ);
+    reconstructedSpectrum.getXYZ(XYZ);
 
 #endif
 
@@ -136,19 +137,19 @@ void SpectralSensor::takeReading()
 
     // get xy
     Chromaticity xy;
-    Spectrum::XYZtoXy(XYZ, xy);
+    reconstructedSpectrum.XYZtoXy(XYZ, xy);
     printf("x = %f, y = %f\n", xy.x, xy.y);
 
     // CCT and duv
-    uint16_t cct = Spectrum::CIE1931_xy_to_CCT(xy);
-    uint16_t cct2 = Spectrum::CIE1931_xy_to_CCT_wikipedia(xy);
-    double duv = Spectrum::CIE1931_xy_to_duv(xy);
+    uint16_t cct = reconstructedSpectrum.xyToCCT(xy);
+    uint16_t cct2 = reconstructedSpectrum.xyToCCT_wikipedia(xy); // for debug comparison purposes only
+    double duv = reconstructedSpectrum.xyToDuv(xy);
     printf("CCT = %dK, Duv = %f\n", cct, duv);
     printf("CCT = %dK (wikipedia)\n", cct2);
 
     // CRI
     uint8_t Ri[MAX_TCS];
-    m_cri.calculateCRI2(reconstructedSpectrum, Ri);
+    m_cri.calculateCRI(reconstructedSpectrum, Ri);
 
     for (uint8_t i = 0; i < MAX_TCS; i++)
     {
@@ -160,6 +161,60 @@ void SpectralSensor::takeReading()
 }
 
 #ifdef VERIFY_CALCS
+
+bool compareDouble(const double& a, const double& b, double epsilon = 0.0000001f)
+{
+    return (fabs(a - b) < epsilon);
+}
+
+// copy of AS7341::multiplyMatrices
+void SpectralSensor::multiplyMatrices(const Matrix &matrixA, const Matrix &matrixB, Matrix &product, const size_t rows,
+                                      const size_t columns)
+{
+    // columns of matrix A must be equal to rows of matrix B
+    size_t rowA = rows, colA = columns;
+    size_t rowB = columns, colB = 1;
+    int i, j, k;
+
+    // multiply
+    for (i = 0; i < rowA; i++)
+    {
+        for (j = 0; j < colB; j++)
+        {
+            for (k = 0; k < colA; k++)
+            {
+                product[i][j] += matrixA[i][k] * matrixB[k][j];
+                // printf("i=%d j=%d k=%d\n", i, j, k); OK
+            }
+        }
+    }
+}
+
+void SpectralSensor::toMatrix(const vector<double> &values, Matrix &matrix)
+{
+    // init
+    matrix.clear();
+    matrix.resize(values.size());
+
+    for (uint16_t row = 0; row < values.size(); row++)
+    {
+        matrix[row].resize(1);
+    }
+
+    // copy values
+    for (uint8_t i = 0; i < values.size(); i++)
+    {
+        matrix[i][0] = values[i];
+    }
+}
+
+void SpectralSensor::toArray(const Matrix &matrix, vector<double> &values)
+{
+    for (uint16_t i = 0; i < matrix.size(); i++)
+    {
+        values[i] = matrix[i][0];
+    }
+}
 
 void SpectralSensor::checkChannelDataCalcs()
 {
@@ -187,8 +242,10 @@ void SpectralSensor::checkCIE1931Calcs(uint8_t noOfChannels)
     Matrix correctedCountsMatrix;
     toMatrix(tstCorrectedCounts, correctedCountsMatrix);
 
+    vector<double> dummyXYZ(3);
     Matrix XYZmatrix;
-    Spectrum::multiplyMatrices(m_correctionMatrix, correctedCountsMatrix, XYZmatrix, 3, noOfChannels);
+    toMatrix(dummyXYZ, XYZmatrix);
+    multiplyMatrices(m_correctionMatrix, correctedCountsMatrix, XYZmatrix, 3, noOfChannels);
 
     Tristimulus XYZ;
     XYZ.X = XYZmatrix[0][0];
@@ -197,14 +254,16 @@ void SpectralSensor::checkCIE1931Calcs(uint8_t noOfChannels)
 
     printf("X = %f, Y = %f, Z = %f\n", XYZ.X, XYZ.Y, XYZ.Z);
 
+    Spectrum dummySpd;
+
     // get xy
     Chromaticity xy;
-    Spectrum::XYZtoXy(XYZ, xy);
+    dummySpd.XYZtoXy(XYZ, xy);
     printf("x = %f, y = %f\n", xy.x, xy.y);
 
     // CCT and duv
-    uint16_t cct = Spectrum::CIE1931_xy_to_CCT(xy);
-    double duv = Spectrum::CIE1931_xy_to_duv(xy);
+    uint16_t cct = dummySpd.xyToCCT(xy);
+    double duv = dummySpd.xyToDuv(xy);
     printf("CCT = %dK, duv = %f\n", cct, duv);
 }
 
@@ -215,10 +274,14 @@ void SpectralSensor::verifySpectralReconstruction()
     const uint16_t wavelengths = ALL_WAVELENGTHS;
     const uint16_t visibleWavelengths = VISIBLE_WAVELENGTHS;
 
+    MCP2221 dummyDev(0x00);
+    AS7341 sensor(dummyDev);
     vector<double> reconstructedSpectrum;
-    reconstructedSpectrum.resize(ALL_WAVELENGTHS);
 
-    Spectrum::reconstructSpectrum(m_correctionMatrix, tstCorrectedCounts, reconstructedSpectrum);
+    reconstructedSpectrum.resize(ALL_WAVELENGTHS);
+    sensor.reconstructSpectrum(m_correctionMatrix, tstCorrectedCounts, reconstructedSpectrum);
+
+    Spectrum reconstructedSpd(reconstructedSpectrum);
 
     // dump 1st 20 values to screen
     for (uint16_t wavelength = 0; wavelength < 20; wavelength++)
@@ -228,42 +291,24 @@ void SpectralSensor::verifySpectralReconstruction()
 
     // spectrum to XYZ
     Tristimulus XYZ;
-    Spectrum::spectrumToXYZ(reconstructedSpectrum, XYZ);
+    reconstructedSpd.getXYZ(XYZ);
     printf("X = %f, Y = %f, Z = %f\n", XYZ.X, XYZ.Y, XYZ.Z);
 
     //
-    Spectrum::saveToCsv(reconstructedSpectrum, "reconstructedSpectrum.csv");
+    reconstructedSpd.saveToCsv("reconstructedSpectrum.csv");
 
     // get xy
     Chromaticity xy;
-    Spectrum::XYZtoXy(XYZ, xy);
+    reconstructedSpd.XYZtoXy(XYZ, xy);
     printf("x = %f, y = %f\n", xy.x, xy.y);
 
     // CCT and duv
-    uint16_t cct = Spectrum::CIE1931_xy_to_CCT(xy);
-    double duv = Spectrum::CIE1931_xy_to_duv(xy);
+    uint16_t cct = reconstructedSpd.xyToCCT(xy);
+    double duv = reconstructedSpd.xyToDuv(xy);
     printf("CCT = %dK, duv = %f\n", cct, duv);
 }
 
 #endif
-
-void SpectralSensor::toMatrix(const vector<double> &values, Matrix &matrix)
-{
-    // init
-    matrix.clear();
-    matrix.resize(values.size());
-
-    for (uint16_t row = 0; row < values.size(); row++)
-    {
-        matrix[row].resize(1);
-    }
-
-    // copy values
-    for (uint8_t i = 0; i < values.size(); i++)
-    {
-        matrix[i][0] = values[i];
-    }
-}
 
 void SpectralSensor::readCSV(const string &filename, Matrix &correctionMatrix)
 {

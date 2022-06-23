@@ -31,39 +31,38 @@ struct Chromaticity
 class Spectrum
 {
   public:
-    typedef std::vector<std::vector<double>> Matrix;
+    typedef std::vector<std::vector<double>> CIE1931Table;
 
-    // AS7341 counts to XYZ
-    static void countsToXYZ(const Matrix &correctionMatrix, const std::vector<double> &counts, Tristimulus &XYZ);
+    Spectrum();
+    Spectrum(const std::vector<double> &spd);
 
-    // spectrum to XYZ
-    static void spectrumToXYZ(const std::vector<double> &spd, Tristimulus &XYZ);
+    std::vector<double> &getSpd();
+    uint16_t getNoOfWavelengths() const;
+    void normalize();
+    void getXYZ(Tristimulus &XYZ) const;
+    uint16_t getCCT() const;
+    void resize(uint16_t newSize);
+
+    // save to CSV
+    void saveToCsv(const std::string &filename);
 
     // XYZ to xy
-    static void XYZtoXy(const Tristimulus &XYZ, Chromaticity &xy);
+    void XYZtoXy(const Tristimulus &XYZ, Chromaticity &xy) const;
 
     // CIE 1931 xy to CCT
     // McCamy's approximation
-    static uint16_t CIE1931_xy_to_CCT(const Chromaticity &xy);
-    static uint16_t CIE1931_xy_to_CCT_wikipedia(const Chromaticity &xy);
+    uint16_t xyToCCT(const Chromaticity &xy) const;
+    uint16_t xyToCCT_wikipedia(const Chromaticity &xy) const;
 
     // CIE 1931 xy to Duv
-    static float CIE1931_xy_to_duv(const Chromaticity &xy);
+    float xyToDuv(const Chromaticity &xy) const;
 
-    // spectral reconstruction based on channel data (AMS specific)
-    static void reconstructSpectrum(const Matrix &spectralMatrix, const std::vector<double> &countMatrix,
-                                    std::vector<double> &reconstructedSpectrum);
+    double &operator[](int i);
 
-    // save to CSV
-    static void saveToCsv(const std::vector<double> &spd, const std::string &filename);
+  private:
+    void loadCIE1931Table();
+    void readCSV(const std::string &filename, CIE1931Table &table);
 
-    // matrix multiplication
-    static void multiplyMatrices(const Matrix &matrixA, const Matrix &matrixB, Matrix &product,
-                                 const size_t rows, const size_t columns);
-
-    static void toMatrix(const std::vector<double>& values, Matrix& matrix);
-
-    static void toArray(const Matrix& matrix, std::vector<double>& values);
-
-    static bool isNegative(double v);
+    std::vector<double> m_spd;
+    CIE1931Table m_cie1931Table;
 };

@@ -1,9 +1,6 @@
 #pragma once
 
 #include "Spectrum.h"
-#include <cstdint>
-#include <string>
-#include <vector>
 
 // only TCS1 to TCS14 supported, need values for TCS15
 // TODO obtain TSC15 in 1mn steps
@@ -17,33 +14,23 @@ class ColorRenderingIndex
     void loadTCSTable();
 
     // calculate CRI values
-    void calculateCRI2(std::vector<double> &spd, uint8_t Ri[]);
+    void calculateCRI(Spectrum &spd, uint8_t Ri[]);
 
   private:
     typedef std::vector<std::vector<float>> TCSTable;
 
-    void normalize(std::vector<double> &values);
+    void prepareReference(uint16_t cct, uint8_t stepsize);
 
-    // normalize TCS XYZ values based on original
+    // normalize TCS XYZ values
     void normalizeTCS(Tristimulus XYZ[], double Ynorm);
 
-    // convert chromaticities to the CIE 1960 / CIE 1976
+    // convert chromaticities to CIE 1960 / CIE 1976
     void convertToCIE1960(const Tristimulus &XYZ, double &u, double &v);
     void convertToCIE1960(const Chromaticity &xy, double &u, double &v);
     void convertToCIE1976(const Chromaticity &xy, double &u, double &v);
 
     // use von Kries chromatic transform equation to find the corresponding color
-    // c and d constants for use in Von Kries
     void chromaticTransform(double u, double v, double &c, double &d);
-
-    // get CCT to determine reference illuminant
-    uint16_t getCCT(const std::vector<double> &spd);
-
-    //
-    void prepareTestSPD(const std::vector<double> &spd);
-
-    // setup reference since those values won't change
-    void prepareReference2(const std::vector<double> &spd);
 
     // make sure chromaticity distance (DC) is under 5.4x10-3 in CIE 1960
     // CRI is only defined for light sources that are approximately white
@@ -59,8 +46,7 @@ class ColorRenderingIndex
 
     struct Reference
     {
-        std::vector<double> reference;
-        std::vector<double> refl;
+        Spectrum reference;
         Tristimulus XYZ;
         Tristimulus TCSXYZ[MAX_TCS];
         double YNormal = 0;

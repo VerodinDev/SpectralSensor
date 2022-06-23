@@ -2,6 +2,7 @@
 
 #include "AS7341_I2C_registers.h"
 #include "MCP2221.h"
+#include "Spectrum.h"
 #include <stdint.h>
 
 // enable calc verification against example values in AMS excel
@@ -35,6 +36,8 @@ class AS7341
   public:
     AS7341(MCP2221 &i2cController);
     ~AS7341();
+
+    typedef std::vector<std::vector<double>> Matrix;
 
     void init();
 
@@ -78,6 +81,13 @@ class AS7341
     double getCorrectedCount(SpectralChannel channel) const;
     void getCorrectedCounts(double[]) const;
 
+    // counts to XYZ
+    void countsToXYZ(const Matrix &correctionMatrix, const std::vector<double> &counts, Tristimulus &XYZ);
+
+    // spectral reconstruction based on channel data
+    void reconstructSpectrum(const Matrix &spectralMatrix, const std::vector<double> &countMatrix,
+                             std::vector<double> &reconstructedSpectrum);
+
   private:
     // AS7341();
 
@@ -87,7 +97,14 @@ class AS7341
     void normalise();
     uint8_t getAStatus();
 
-    MCP2221& m_i2c;
+    // matrix multiplication
+    void multiplyMatrices(const Matrix &matrixA, const Matrix &matrixB, Matrix &product, const size_t rows,
+                          const size_t columns);
+    void toMatrix(const std::vector<double> &values, Matrix &matrix);
+    void toArray(const Matrix &matrix, std::vector<double> &values);
+    //bool isNegative(double v);
+
+    MCP2221 &m_i2c;
     as7341_waiting m_readingState;
     as7341_gain m_gainStatus;
     bool m_isSaturated;

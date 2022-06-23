@@ -6,8 +6,15 @@
 #include <mcp2221_dll_um.h>
 #include <stdexcept>
 #include <windows.h> // Sleep()
+#include <functional>
 
 using namespace std;
+using namespace std::placeholders;
+
+bool isNegative(double v)
+{
+    return (v < 0);
+}
 
 AS7341::AS7341(MCP2221 &i2cController)
     : m_i2c(i2cController), m_readingState(AS7341_WAITING_DONE), m_gainStatus(AS7341_GAIN_1X), m_isSaturated(false),
@@ -592,4 +599,120 @@ uint8_t AS7341::getAStatus()
     printf("saturation = %d, gain status = %d\n", m_isSaturated, m_gainStatus);
 
     return true;
+}
+
+void AS7341::countsToXYZ(const Matrix& correctionMatrix, const vector<double>& counts, Tristimulus& XYZ)
+{
+    // put counts into matrix
+    Matrix countMatrix;
+    countMatrix.resize(counts.size());
+    for (uint8_t i = 0; i < counts.size(); i++)
+    {
+        countMatrix[i][0] = counts[i];
+    }
+
+    Matrix XYZmatrix;
+    XYZmatrix.resize(3);
+    multiplyMatrices(correctionMatrix, countMatrix, XYZmatrix, XYZmatrix.size(), counts.size());
+
+    // get XYZ from matrix
+    XYZ.X = XYZmatrix[0][0];
+    XYZ.Y = XYZmatrix[1][0];
+    XYZ.Z = XYZmatrix[2][0];
+}
+
+void AS7341::reconstructSpectrum(const Matrix& spectralMatrix, const vector<double>& counts,
+                                   vector<double>& reconstructedSpectrum)
+{
+    Matrix countMatrix;
+    toMatrix(counts, countMatrix);
+
+    // temp matrix to store result
+    Matrix reconstructedMatrix;
+    reconstructedMatrix.resize(spectralMatrix.size());
+    for (uint16_t row = 0; row < spectralMatrix.size(); row++)
+    {
+        reconstructedMatrix[row].resize(1);
+    }
+
+    multiplyMatrices(spectralMatrix, countMatrix, reconstructedMatrix, spectralMatrix.size(), 10);
+
+    toArray(reconstructedMatrix, reconstructedSpectrum);
+
+    // only use visible spectrum from here on
+    reconstructedSpectrum.resize(VISIBLE_WAVELENGTHS);
+
+    // strip negative values
+    replace_if(reconstructedSpectrum.begin(), reconstructedSpectrum.end(), bind(&isNegative, _1), 0);
+
+    //// normalise
+    // double highestValue(0);
+
+    // for (uint16_t i = 0; i < wavelengths; i++)
+    //{
+    //     if (reconstructedSpectrum[i][0] > highestValue)
+    //     {
+    //         highestValue = reconstructedSpectrum[i][0];
+    //     }
+    // }
+    //
+    // for (uint16_t i = 0; i < wavelengths; i++)
+    //{
+    //     reconstructedSpectrum[i][0] /= highestValue;
+    // }
+}
+
+// excel, photometric results
+// correct sensor data (gain corrected * factor - offset)) 1x10 matrix
+//
+//		Fn
+// X	n
+// Y	n
+// Z	n
+void AS7341::multiplyMatrices(const Matrix& matrixA, const Matrix& matrixB, Matrix& product, const size_t rows,
+                                const size_t columns)
+{
+    // columns of matrix A must be equal to rows of matrix B
+    size_t rowA = rows, colA = columns;
+    size_t rowB = columns, colB = 1;
+    int i, j, k;
+
+    // multiply
+    for (i = 0; i < rowA; i++)
+    {
+        for (j = 0; j < colB; j++)
+        {
+            for (k = 0; k < colA; k++)
+            {
+                product[i][j] += matrixA[i][k] * matrixB[k][j];
+                // printf("i=%d j=%d k=%d\n", i, j, k); OK
+            }
+        }
+    }
+}
+
+void AS7341::toMatrix(const vector<double>& values, Matrix& matrix)
+{
+    // init
+    matrix.clear();
+    matrix.resize(values.size());
+
+    for (uint16_t row = 0; row < values.size(); row++)
+    {
+        matrix[row].resize(1);
+    }
+
+    // copy values
+    for (uint8_t i = 0; i < values.size(); i++)
+    {
+        matrix[i][0] = values[i];
+    }
+}
+
+void AS7341::toArray(const Matrix &matrix, vector<double> &values)
+{
+    for (uint16_t i = 0; i < matrix.size(); i++)
+    {
+        values[i] = matrix[i][0];
+    }
 }
